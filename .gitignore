@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# PyInstaller
+build/
+dist/
+
+# Bundled UPX binary (download separately: https://github.com/upx/upx/releases)
+upx-*/
+
+# Game saves and local settings
+savegame.json
+save_slot_*.json
+settings.json
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
