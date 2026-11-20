@@ -1,33 +1,36 @@
 # ePICRPG — Android (Kivy + Buildozer)
 
-Mobile client for ePICRPG. Game logic stays in the repo root (`player`, `combat`, `items`, …).  
-Desktop Tkinter (`gui_main.py`) is unchanged.
+Мобильный клиент ePICRPG. Общая логика игры — в [`../core/`](../core/) (`player`, `combat`, `items`, …).  
+Desktop Tkinter: [`../desktop/gui_main.py`](../desktop/gui_main.py).
 
-## Status (first debug APK)
+## Status
 
 | | |
 |---|---|
-| APK | [`bin/epicrpg-2.2.9-arm64-v8a-debug.apk`](bin/epicrpg-2.2.9-arm64-v8a-debug.apk) (~21 MB) |
+| APK (локальная сборка) | `bin/epicrpg-2.2.9-arm64-v8a-debug.apk` |
+| Release asset | `ePICRPG-2.2.9b-arm64-v8a-debug.apk` на [Releases](https://github.com/kli133/ePICRPG/releases) |
 | Package | `org.epicrpg.epicrpg` |
 | Arch | `arm64-v8a` |
-| Built | WSL Ubuntu + Buildozer 1.6.0 |
+| Toolchain | WSL Ubuntu + Buildozer |
 
-Playable MVP: New Game → Fight → Attack / Ability / Potion / Flee → Inventory equip/use → Save/Load.
+### Playable
 
-Not ported yet: full shop, events UI, admin panel, multi-theme desktop parity.
+Меню → персонаж → хаб → **Исследовать** (бой или событие) → бой (атака / способность / зелье / бегство) → инвентарь, магазин, характеристики (трата очков) → сохранение / удаление слотов → поражение: новая игра или загрузка.
+
+Ещё не на мобильном: темы оформления, админ-панель, полный паритет desktop UI.
 
 ## Layout
 
 | Path | Role |
 |------|------|
-| `main.py` | Kivy app entry |
-| `game_session.py` | Facade over core game modules |
-| `storage.py` | Points `save_system` at a writable data dir |
-| `screens/` | Menu, character, hub, combat |
-| `assets/` | Icon / presplash placeholders |
-| `buildozer.spec` | APK build config (`source.dir = ..`) |
-| `wsl_build.sh` | Sync to `~/epicrpg` + build via venv |
-| `../main.py` | Buildozer entry (loads `android/main.py` via `runpy`) |
+| `../main.py` | Вход Buildozer |
+| `main.py` / `app_entry.py` | Kivy app |
+| `game_session.py` | Фасад над `core/` |
+| `storage.py` | `sys.path` → `core/` + data dir |
+| `screens/` | menu, character, hub, combat, inventory, shop, stats |
+| `assets/` | icon, splash, фоны, иконки классов |
+| `buildozer.spec` | `source.dir = ..`, включает `core/*` |
+| `wsl_build.sh` | Sync на ext4 + debug APK |
 
 ## Run on Windows (UI debug)
 
@@ -36,50 +39,28 @@ pip install -r android/requirements-android.txt
 python android/main.py
 ```
 
-Saves go to `android/.data/`.
-
-Smoke flow:
-
-1. **New Game** → class → **Start**
-2. **Fight** → **Attack**
-3. **Inventory** → tap item to equip/use
-4. **Save** → slot
+Сейвы: `android/.data/`.
 
 ## Build APK (WSL)
 
-Do **not** build from `/mnt/c` directly (slow / fragile). Use the helper (copies to `~/epicrpg` on ext4):
+Не собирайте с `/mnt/c` напрямую. Хелпер копирует проект в `~/epicrpg`:
 
 ```bash
 wsl -d Ubuntu -- bash /mnt/c/Users/user/Desktop/rpg/android/wsl_build.sh
 ```
 
-One-time toolchain (already done on this machine): JDK 17, `python3-venv`, Buildozer in `~/epicrpg-build-venv`.
+APK появляется в `android/bin/*.apk`.
 
-If WSL cannot reach the network (VPN), set DNS + mirrored networking:
-
-- `~/.wslconfig` → `networkingMode=mirrored`
-- `/etc/resolv.conf` → `8.8.8.8` / `1.1.1.1` with `generateResolvConf = false` in `/etc/wsl.conf`
-- then `wsl --shutdown`
-
-APK is copied to `android/bin/*.apk`.
-
-### Install on a phone
+### Install
 
 ```bash
 adb install -r android/bin/epicrpg-2.2.9-arm64-v8a-debug.apk
 ```
 
-Enable USB debugging. Arm64 device required for this debug build.
+Нужен **arm64** и USB debugging.
 
 ## Notes
 
-- On device, saves use `App.user_data_dir`
-- Orientation: portrait
-- Rebuild after code changes with the same `wsl_build.sh`
-
-## Next porting steps
-
-1. Port shop + events screens
-2. Replace placeholder icon/splash
-3. Add `armeabi-v7a` if needed
-4. `buildozer android release` + signing for Play Store
+- На устройстве сейвы в `App.user_data_dir`
+- Ориентация: portrait
+- После правок кода — снова `wsl_build.sh`
