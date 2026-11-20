@@ -15,6 +15,30 @@ SETTINGS_FILE = "settings.json"
 SLOT_PREFIX = "save_slot_"
 MAX_SLOTS = 5
 
+# Optional absolute directory for saves/settings. None = current working directory
+# (desktop/EXE behavior). Android sets this to App.user_data_dir at startup.
+_DATA_DIR = None
+
+
+def set_data_dir(path):
+    """Set directory for save/settings files. Pass None to use cwd."""
+    global _DATA_DIR
+    if path:
+        os.makedirs(path, exist_ok=True)
+        _DATA_DIR = os.path.abspath(path)
+    else:
+        _DATA_DIR = None
+
+
+def get_data_dir():
+    """Return directory used for save/settings files."""
+    return _DATA_DIR if _DATA_DIR else os.getcwd()
+
+
+def _data_path(filename):
+    """Resolve a save/settings filename against the data directory."""
+    return os.path.join(get_data_dir(), filename)
+
 
 def serialize_item(item):
     """Сериализовать предмет в словарь"""
@@ -192,7 +216,7 @@ def save_game(player, inventory, rotation, victories):
         }
         
         # Запись в файл
-        with open(SAVE_FILE, 'w', encoding='utf-8') as f:
+        with open(_data_path(SAVE_FILE), 'w', encoding='utf-8') as f:
             json.dump(save_data, f, ensure_ascii=False, indent=2)
         
         return True, t('save_success')
@@ -205,7 +229,7 @@ def save_settings(locale_code: str):
     """Сохранить простые настройки (например, язык) в отдельный файл"""
     try:
         data = {'locale': locale_code}
-        with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+        with open(_data_path(SETTINGS_FILE), 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         return True
     except Exception:
@@ -213,7 +237,7 @@ def save_settings(locale_code: str):
 
 
 def _slot_filename(slot: int) -> str:
-    return f"{SLOT_PREFIX}{int(slot)}.json"
+    return _data_path(f"{SLOT_PREFIX}{int(slot)}.json")
 
 
 def list_save_slots():
@@ -239,6 +263,24 @@ def list_save_slots():
         else:
             res[i] = {'exists': False, 'mtime': None, 'player_name': None, 'class_id': None, 'level': None}
     return res
+
+
+def delete_save_slot(slot: int):
+    """Delete a save slot file. Returns (ok, message)."""
+    try:
+        slot = int(slot)
+    except (TypeError, ValueError):
+        return False, t('slot_label_empty', slot=slot)
+    if slot < 1 or slot > MAX_SLOTS:
+        return False, t('slot_label_empty', slot=slot)
+    fn = _slot_filename(slot)
+    if not os.path.exists(fn):
+        return False, t('slot_label_empty', slot=slot)
+    try:
+        os.remove(fn)
+        return True, t('slot_deleted')
+    except Exception as e:
+        return False, t('save_error', error=str(e))
 
 
 def save_game_slot(player, inventory, rotation, victories, slot: int = 1):
@@ -390,9 +432,10 @@ def load_game_slot(slot: int = 1):
 def load_settings():
     """Загрузить настройки из файла, вернуть словарь или None"""
     try:
-        if not os.path.exists(SETTINGS_FILE):
+        path = _data_path(SETTINGS_FILE)
+        if not os.path.exists(path):
             return None
-        with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         # Если в файле указана локаль — применим
         if 'locale' in data:
@@ -405,10 +448,11 @@ def load_settings():
 def load_game():
     """Загрузить игру из файла"""
     try:
-        if not os.path.exists(SAVE_FILE):
+        path = _data_path(SAVE_FILE)
+        if not os.path.exists(path):
             return None, t('save_file_not_found')
         
-        with open(SAVE_FILE, 'r', encoding='utf-8') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             save_data = json.load(f)
         
         # Восстановление игрока
@@ -495,4 +539,4 @@ def load_game():
 
 def has_save_file():
     """Проверить наличие файла сохранения"""
-    return os.path.exists(SAVE_FILE)
+    return os.path.exists(_data_path(SAVE_FILE))

@@ -15,6 +15,24 @@ upx-*/
 savegame.json
 save_slot_*.json
 settings.json
+android/.data/
+
+# Android / Buildozer
+.buildozer/
+android/.buildozer/
+android/bin/
+*.apk
+*.aab
+
+# Node (local tooling)
+node_modules/
+package-lock.json
+package.json
+
+# Build logs / temp screenshots
+android/bin_build_log.txt
+android/bin/*.png
+android/bin/*.xml
 
 # IDE / OS
 .vscode/

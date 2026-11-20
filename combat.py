@@ -3,11 +3,18 @@ from ui import cprint
 from locales import t
 
 
+def _enemy_log(player, msg):
+    """Log enemy skill text for desktop (cprint) and mobile (combat_messages)."""
+    if hasattr(player, "combat_messages"):
+        player.combat_messages.append(msg)
+    cprint(msg, "red")
+
+
 # Enemy skill implementations (simple, deterministic effects)
 def _skill_fire_breath(enemy, player):
     attack_type = 'fire'
     dmg = random.randint(int(enemy.attack * 1.0), int(enemy.attack * 1.6))
-    cprint(f"{enemy.name} использует огненное дыхание!", 'red')
+    _enemy_log(player, t("enemy_skill_fire", name=enemy.name))
     actual = player.take_damage(dmg, element=attack_type, defense_penetration=getattr(enemy, 'penetration', 0.0))
     return actual
 
@@ -15,7 +22,7 @@ def _skill_fire_breath(enemy, player):
 def _skill_shield_bash(enemy, player):
     attack_type = 'physical'
     dmg = random.randint(int(enemy.attack * 0.8), int(enemy.attack * 1.1))
-    cprint(f"{enemy.name} использует Удар щитом! (оглушение)", 'red')
+    _enemy_log(player, t("enemy_skill_bash", name=enemy.name))
     actual = player.take_damage(dmg, element=attack_type, defense_penetration=getattr(enemy, 'penetration', 0.0))
     # apply 1-turn stun to player
     try:
@@ -28,11 +35,11 @@ def _skill_shield_bash(enemy, player):
 def _skill_life_drain(enemy, player):
     attack_type = 'physical'
     dmg = random.randint(int(enemy.attack * 0.7), int(enemy.attack * 1.2))
-    cprint(f"{enemy.name} использует Похищение жизни!", 'red')
+    _enemy_log(player, t("enemy_skill_drain", name=enemy.name))
     actual = player.take_damage(dmg, element=attack_type, defense_penetration=getattr(enemy, 'penetration', 0.0))
     heal = max(1, actual // 2)
     enemy.hp = min(enemy.max_hp, enemy.hp + heal)
-    cprint(f"{enemy.name} восстанавливает {heal} HP.", 'red')
+    _enemy_log(player, t("enemy_skill_drain_heal", name=enemy.name, heal=heal))
     return actual
 
 
@@ -84,7 +91,7 @@ def enemy_take_action(enemy, player):
         attack_type = random.choice(['fire', 'cold'])
     enemy_damage = random.randint(int(enemy.attack * 0.8), int(enemy.attack * 1.2))
     if attack_type != 'physical':
-        cprint(t('enemy_elemental', name=enemy.name, element=attack_type), 'red')
+        _enemy_log(player, t('enemy_elemental', name=enemy.name, element=attack_type))
     actual_damage = player.take_damage(enemy_damage, element=attack_type,
                                        defense_penetration=getattr(enemy, 'penetration', 0.0))
     return actual_damage

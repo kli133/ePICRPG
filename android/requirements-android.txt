@@ -1,0 +1,6 @@
+# Desktop debug of the Kivy client (Windows / Linux / macOS)
+kivy>=2.2.0
+
+# APK packaging (Linux / WSL only — not installed into the game venv on Windows)
+# buildozer>=1.5.0
+# cython

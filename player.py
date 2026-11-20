@@ -67,10 +67,33 @@ class Player:
         self.passive_evade_chance = 0.0
         if self.class_obj and self.class_obj.id == 'rogue':
             self.passive_evade_chance = 0.10  # 10% базово
+        self.stunned_turns = 0
+        # Messages collected for mobile/UI combat log (also still cprinted).
+        self.combat_messages = []
 
         # Применяем базовые бонусы престижа (если есть)
         self.apply_prestige_base_bonuses()
-        
+
+    def clear_combat_messages(self):
+        self.combat_messages = []
+
+    def drain_combat_messages(self):
+        msgs = list(self.combat_messages)
+        self.combat_messages.clear()
+        return msgs
+
+    def _cm(self, msg, color=None):
+        if not msg:
+            return
+        self.combat_messages.append(msg)
+        try:
+            if color is None:
+                cprint(msg)
+            else:
+                cprint(msg, color)
+        except Exception:
+            pass
+
     def get_total_attack(self):
         """Возвращает общую атаку с учётом оружия, требований и артефакта"""
         total = self.attack
@@ -309,29 +332,29 @@ class Player:
         """
         if self.evade:
             self.evade = False
-            cprint(t('evade_success'), 'cyan')
+            self._cm(t('evade_success'), 'cyan')
             return 0
         
         # Уклонение зависит от ловкости
         if self.check_evade():
-            cprint(f"Уклонение ({int(self.get_evade_chance()*100)}% шанс)!", 'cyan')
+            self._cm(t('evade_chance_proc', pct=int(self.get_evade_chance() * 100)), 'cyan')
             return 0
         
         # Пассивное уклонение Разбойника (в дополнение к основному)
         if self.class_obj and self.class_obj.id == 'rogue' and self.passive_evade_chance > 0:
             if random.random() < self.passive_evade_chance:
-                cprint(t('passive_evade'), 'cyan')
+                self._cm(t('passive_evade'), 'cyan')
                 return 0
 
         # Применяем сопротивления к элементальному урону до учёта брони
         if element == 'fire' and getattr(self, 'fire_resist', 0) > 0:
             reduction = max(0.0, min(100.0, self.fire_resist))
             damage = int(damage * max(0.0, 1.0 - reduction / 100.0))
-            cprint(t('resist_fire_reduce', pct=f"{reduction:.0f}"), 'cyan')
+            self._cm(t('resist_fire_reduce', pct=f"{reduction:.0f}"), 'cyan')
         elif element == 'cold' and getattr(self, 'cold_resist', 0) > 0:
             reduction = max(0.0, min(100.0, self.cold_resist))
             damage = int(damage * max(0.0, 1.0 - reduction / 100.0))
-            cprint(t('resist_cold_reduce', pct=f"{reduction:.0f}"), 'cyan')
+            self._cm(t('resist_cold_reduce', pct=f"{reduction:.0f}"), 'cyan')
 
         # Учитываем пробивание брони: уменьшаем эффективность защиты игрока
         total_def = self.get_total_defense()
@@ -374,7 +397,7 @@ class Player:
                 actual = max(1, damage - effective_def)
                 enemy.hp -= actual
                 self.apply_artifact_on_hit(enemy, actual)
-                cprint(t('you_attack', name=name, damage=actual), 'yellow')
+                self._cm(t('you_attack', name=name, damage=actual), 'yellow')
             elif ability_id == 'mage_lightning':
                 damage = int(self.get_total_attack() * multiplier) + int(self.intellect * 0.5 * skill_level)
                 actual = max(1, damage - enemy.defense)
@@ -382,13 +405,18 @@ class Player:
                 self.apply_artifact_on_hit(enemy, actual)
                 # stun duration scales with level
                 enemy.stunned_turns = max(1, getattr(enemy, 'stunned_turns', 0) + 1 + (skill_level // 2))
-                cprint(t('you_attack', name=name, damage=actual) + ' ' + t('enemy_stunned', name=''), 'magenta')
+                self._cm(
+                    t('you_attack', name=name, damage=actual)
+                    + ' '
+                    + t('enemy_stunned', name=enemy.name),
+                    'magenta',
+                )
             elif ability_id == 'rogue_evade':
                 # evade becomes chance-based buff; higher skill gives higher passive chance
                 self.evade = True
                 # also increase passive evade chance slightly per skill level
                 self.passive_evade_chance = max(self.passive_evade_chance, 0.10 + 0.02 * (skill_level - 1))
-                cprint(t('ability',) + f" {name}: " + t('evade_success'), 'cyan')
+                self._cm(t('ability') + f" {name}: " + t('evade_success'), 'cyan')
         else:
             # fallback to legacy hardcoded abilities
             if ability_id == 'warrior_rage':
@@ -397,19 +425,24 @@ class Player:
                 actual = max(1, damage - max(0, enemy.defense // 2))
                 enemy.hp -= actual
                 self.apply_artifact_on_hit(enemy, actual)
-                cprint(t('you_attack', name=name, damage=actual), 'yellow')
+                self._cm(t('you_attack', name=name, damage=actual), 'yellow')
             elif ability_id == 'mage_lightning':
                 damage = int(self.get_total_attack() * 1.5) + 5
                 actual = max(1, damage - enemy.defense)
                 enemy.hp -= actual
                 self.apply_artifact_on_hit(enemy, actual)
                 enemy.stunned_turns = max(1, getattr(enemy, 'stunned_turns', 0) + 1)
-                cprint(t('you_attack', name=name, damage=actual) + ' ' + t('enemy_stunned', name=''), 'magenta')
+                self._cm(
+                    t('you_attack', name=name, damage=actual)
+                    + ' '
+                    + t('enemy_stunned', name=enemy.name),
+                    'magenta',
+                )
             elif ability_id == 'rogue_evade':
                 self.evade = True
-                cprint(t('ability',) + f" {name}: " + t('evade_success'), 'cyan')
+                self._cm(t('ability') + f" {name}: " + t('evade_success'), 'cyan')
             else:
-                print("Способность пока не реализована.")
+                self._cm(t('ability_not_implemented'))
                 return False
 
         # Устанавливаем перезарядку
@@ -620,8 +653,8 @@ class Player:
         if self.has_artifact('blood_thorn'):
             heal = max(1, int(damage * 0.08))
             self.heal(heal)
-            cprint(t('artifact_lifesteal', heal=heal), 'magenta')
+            self._cm(t('artifact_lifesteal', heal=heal), 'magenta')
         if self.has_artifact('storm_lens') and enemy is not None and enemy.is_alive():
             if random.random() < 0.15:
                 enemy.stunned_turns = max(1, getattr(enemy, 'stunned_turns', 0) + 1)
-                cprint(t('artifact_stun'), 'cyan')
+                self._cm(t('artifact_stun'), 'cyan')
