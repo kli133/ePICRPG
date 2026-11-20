@@ -18,7 +18,7 @@
 To rebuild after making code changes:
 
 ```bash
-python build_exe.py
+python desktop/build_exe.py
 ```
 
 This will:
@@ -38,7 +38,7 @@ This will:
 
 When updating the game version:
 1. Edit `version.py` and change the `VERSION` string
-2. Rebuild with `python build_exe.py`
+2. Rebuild with `python desktop/build_exe.py`
 3. The new EXE will have the updated version in the title bar
 
 ## Troubleshooting

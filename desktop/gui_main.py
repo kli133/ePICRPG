@@ -1,6 +1,16 @@
 """
 Графический интерфейс для текстовой RPG игры
 """
+import os
+import sys
+
+# Shared game logic lives in ../core (flat imports: player, combat, …).
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_CORE = os.path.join(_ROOT, "core")
+for _p in (_CORE, _ROOT):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, simpledialog
 import random

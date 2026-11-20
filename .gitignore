@@ -16,6 +16,7 @@ savegame.json
 save_slot_*.json
 settings.json
 android/.data/
+private/
 
 # Android / Buildozer
 .buildozer/

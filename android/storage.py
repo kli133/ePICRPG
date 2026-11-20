@@ -3,17 +3,17 @@ import os
 import sys
 from typing import Optional
 
-# Ensure repo root is on sys.path so core modules import cleanly.
+# Repo root and shared game logic (core/).
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
+_CORE = os.path.join(_ROOT, "core")
 
 
 def ensure_core_path():
-    """Idempotent: put game root on sys.path."""
-    if _ROOT not in sys.path:
-        sys.path.insert(0, _ROOT)
-    return _ROOT
+    """Idempotent: put core/ (then repo root) on sys.path for flat imports."""
+    for path in (_CORE, _ROOT):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    return _CORE
 
 
 def init_data_dir(path: Optional[str] = None) -> str:

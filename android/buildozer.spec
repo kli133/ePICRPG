@@ -16,10 +16,10 @@ source.dir = ..
 source.include_exts = py,png,jpg,kv,atlas,json,ttf,otf
 
 # (list) List of inclusions using patterns matching directories
-source.include_patterns = android/*,android/assets/*,android/assets/fonts/*,android/screens/*,*.py
+source.include_patterns = android/*,android/assets/*,android/assets/fonts/*,android/screens/*,core/*,*.py
 
 # (list) List of directory to exclude
-source.exclude_dirs = tests,docs,build,dist,.venv,venv,upx-5.1.0-win64,.git,__pycache__,android/.data,android/.buildozer,android/bin,.buildozer
+source.exclude_dirs = tests,docs,build,dist,.venv,venv,upx-5.1.0-win64,.git,__pycache__,android/.data,android/.buildozer,android/bin,.buildozer,desktop,node_modules,private
 
 # (list) List of patterns to exclude (desktop-only / tooling)
 source.exclude_patterns = license,images/*/*.jpg,**/gui_main.py,**/launcher.py,**/build_exe.py,**/ePICRPG.spec,**/__pycache__/*,**/*.pyc,android/_wsl_*.sh,android/bin_build_log.txt

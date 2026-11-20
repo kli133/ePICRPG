@@ -59,8 +59,10 @@
 ```bash
 git clone https://github.com/kli133/ePICRPG.git
 cd ePICRPG
-python gui_main.py
+python desktop/gui_main.py
 ```
+
+Android (Kivy): `python android/main.py` · сборка APK: см. [android/README.md](android/README.md).
 
 > На Linux Tkinter может понадобиться установить отдельно: `sudo apt install python3-tk`.
 
@@ -148,7 +150,7 @@ python gui_main.py
 
 ```bash
 pip install -r requirements.txt
-python build_exe.py
+python desktop/build_exe.py
 ```
 
 Готовый файл появится в `dist/ePICRPG.exe`. Если в `PATH` или в переменной `UPX_DIR` есть [UPX](https://github.com/upx/upx/releases), он будет использован для сжатия.
@@ -159,22 +161,15 @@ python build_exe.py
 
 ```
 ePICRPG/
-├── gui_main.py        # Графический интерфейс, точка входа
-├── launcher.py        # Точка входа для EXE-сборки
-├── player.py          # Игрок: характеристики, уровни, престиж, навыки
-├── classes.py         # Классы персонажей и их способности
-├── skills.py          # Описание навыков и их скейлинга
-├── combat.py          # Враги и боевая логика
-├── items.py           # Предметы, качество, генерация снаряжения и артефактов
-├── inventory.py       # Инвентарь, продажа, улучшение предметов
-├── events.py          # Движок событий
-├── events_data.py     # Набор игровых событий
-├── save_system.py     # Сохранения (5 слотов) и настройки
-├── locales.py         # Локализация RU / EN
-├── ui.py              # Вспомогательные функции интерфейса
-├── version.py         # Название и версия игры
-├── build_exe.py       # Скрипт сборки EXE
-├── ePICRPG.spec       # Конфигурация PyInstaller
+├── main.py            # Вход Buildozer / Android
+├── version.py         # Название и версия
+├── core/              # Общая игровая логика (player, combat, items, …)
+├── desktop/           # Tkinter GUI + сборка EXE
+│   ├── gui_main.py
+│   ├── launcher.py
+│   ├── build_exe.py
+│   └── ePICRPG.spec
+├── android/           # Kivy-клиент и Buildozer
 ├── tests/             # Тестовые сценарии
 └── docs/              # Документация
 ```
