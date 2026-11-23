@@ -7,9 +7,9 @@ Desktop Tkinter: [`../desktop/gui_main.py`](../desktop/gui_main.py).
 
 | | |
 |---|---|
-| Release APK (игра) | `bin/ePICRPG-2.2.9b-arm64.apk` — подписанный release |
-| Debug APK | `bin/epicrpg-2.2.9-arm64-v8a-debug.apk` |
-| Release asset | `ePICRPG-2.2.9b-arm64.apk` на [Releases](https://github.com/kli133/ePICRPG/releases) |
+| Release APK (игра) | `bin/ePICRPG-2.5.6b-arm64.apk` — подписанный release |
+| Debug APK | `bin/epicrpg-2.5.6-arm64-v8a-debug.apk` |
+| Release asset | `ePICRPG-2.5.6b-arm64.apk` на [Releases](https://github.com/kli133/ePICRPG/releases) |
 | Package | `org.epicrpg.epicrpg` |
 | Arch | `arm64-v8a` |
 | Toolchain | WSL Ubuntu + Buildozer |
@@ -60,7 +60,7 @@ APK появляется в `android/bin/*.apk`. Release-ключ хранитс
 ### Install
 
 ```bash
-adb install -r android/bin/ePICRPG-2.2.9b-arm64.apk
+adb install -r android/bin/ePICRPG-2.5.6b-arm64.apk
 ```
 
 Нужен **arm64**. Для release APK USB debugging не обязателен — можно просто открыть файл на телефоне.

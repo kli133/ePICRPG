@@ -8,4 +8,4 @@
 # The displayed window title and the saved-file 'version' field use
 # these constants.
 GAME_NAME = "ePICRPG"
-VERSION = "2.2.9b"
+VERSION = "2.5.6b"

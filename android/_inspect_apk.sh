@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-APK="${1:-/root/epicrpg/android/bin/epicrpg-2.2.9-arm64-v8a-debug.apk}"
+APK="${1:-/root/epicrpg/android/bin/epicrpg-2.5.6-arm64-v8a-debug.apk}"
 TMP=/tmp/epicrpg-apk-inspect
 rm -rf "$TMP"
 mkdir -p "$TMP/private"

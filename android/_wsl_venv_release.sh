@@ -66,12 +66,12 @@ for f in bin/*-release*.apk bin/*release*.apk; do
   [[ -f "$f" ]] || continue
   found=1
   cp -v "$f" "${WIN_SRC}/android/bin/"
-  cp -v "$f" "${WIN_SRC}/android/bin/ePICRPG-2.2.9b-arm64.apk"
+  cp -v "$f" "${WIN_SRC}/android/bin/ePICRPG-2.5.6b-arm64.apk"
 done
 if [[ "$found" -eq 0 ]]; then
   echo "ERROR: no release APK in bin/ (got AAB instead?)"
   ls -la bin/ || true
   exit 1
 fi
-ls -la "${WIN_SRC}/android/bin/"*release* "${WIN_SRC}/android/bin/ePICRPG-2.2.9b-arm64.apk" 2>/dev/null || true
+ls -la "${WIN_SRC}/android/bin/"*release* "${WIN_SRC}/android/bin/ePICRPG-2.5.6b-arm64.apk" 2>/dev/null || true
 echo BUILD_RELEASE_OK

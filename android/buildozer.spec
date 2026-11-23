@@ -25,7 +25,7 @@ source.exclude_dirs = tests,docs,build,dist,.venv,venv,upx-5.1.0-win64,.git,__py
 source.exclude_patterns = license,images/*/*.jpg,**/gui_main.py,**/launcher.py,**/build_exe.py,**/ePICRPG.spec,**/__pycache__/*,**/*.pyc,android/_wsl_*.sh,android/bin_build_log.txt
 
 # (str) Application versioning (method 1) — keep in sync with version.py when releasing
-version = 2.2.9
+version = 2.5.6
 
 # (list) Application requirements
 requirements = python3,kivy

@@ -7,7 +7,7 @@
 Классы и навыки, пошаговые бои, лут и артефакты, события с выбором,
 магазин, прокачка характеристик, престиж и ротации. RU / EN.
 
-![Version](https://img.shields.io/badge/version-2.2.9b-blueviolet)
+![Version](https://img.shields.io/badge/version-2.5.6b-blueviolet)
 ![Python](https://img.shields.io/badge/python-3.8%2B-3776AB?logo=python&logoColor=white)
 ![Desktop](https://img.shields.io/badge/Desktop-Tkinter-orange)
 ![Android](https://img.shields.io/badge/Android-Kivy%20APK-3DDC84?logo=android&logoColor=white)
@@ -55,8 +55,8 @@
 | Файл | Платформа |
 |------|-----------|
 | `ePICRPG.exe` | Windows (Python не нужен) |
-| `ePICRPG-2.2.9b-arm64.apk` | Android **arm64** (обычная установка как игра) |
-| `ePICRPG-2.2.9b-arm64-v8a-debug.apk` | Android debug-сборка (для разработки) |
+| `ePICRPG-2.5.6b-arm64.apk` | Android **arm64** (обычная установка как игра) |
+| `ePICRPG-2.5.6b-arm64-v8a-debug.apk` | Android debug-сборка (для разработки) |
 
 ### Desktop из исходников
 
