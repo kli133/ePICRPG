@@ -85,11 +85,11 @@ class ShopScreen(Screen):
     def on_pre_enter(self, *_):
         self._selected = None
         self.feedback.text = ""
-        self.refresh()
+        self.refresh(rebuild_stock=True)
 
-    def refresh(self):
+    def refresh(self, rebuild_stock: bool = False):
         session = self._session()
-        self._rows = session.list_shop()
+        self._rows = session.list_shop(refresh=rebuild_stock)
         gold = session.player.gold if session.player else 0
         inv_count = len(session.inventory.items) if session.inventory else 0
         max_size = getattr(session.inventory, "max_size", 20)
@@ -105,9 +105,16 @@ class ShopScreen(Screen):
         for i, row in enumerate(self._rows):
             affordable = row.get("affordable", True) and not full
             stats = row.get("stats_line") or ""
-            text = f"[{row['kind_label']}] {row['name']} — {row['price']}"
-            if stats:
-                text = f"{text}\n{stats}"
+            cmp = row.get("compare_mark") or ""
+            prefix = f"{t('shop_upgrade_offer')} " if row.get("featured") else ""
+            text = f"{prefix}[{row['kind_label']}] {row['name']} — {row['price']}"
+            extras = "  ".join(p for p in (stats, cmp) if p)
+            if extras:
+                text = f"{text}\n{extras}"
+            # Dim worse gear more so junk is obvious
+            opacity = 1.0 if affordable else 0.45
+            if cmp.startswith("▼") and affordable and not row.get("featured"):
+                opacity = min(opacity, 0.65)
             btn = Button(
                 text=text,
                 size_hint_y=None,
@@ -115,15 +122,21 @@ class ShopScreen(Screen):
                 font_size="13sp",
                 halign="left",
                 valign="middle",
-                opacity=1.0 if affordable else 0.45,
+                opacity=opacity,
             )
             btn.bind(size=lambda inst, v: setattr(inst, "text_size", (inst.width - 16, None)))
             btn.bind(on_release=self._make_select(i))
             self.list_inner.add_widget(btn)
 
         if self._selected is not None:
-            sid = self._selected.get("id")
-            match = next((r for r in self._rows if r["id"] == sid), None)
+            sel_item = self._selected.get("item")
+            match = next(
+                (r for r in self._rows if r.get("item") is sel_item),
+                None,
+            )
+            if match is None:
+                sid = self._selected.get("id")
+                match = next((r for r in self._rows if r["id"] == sid), None)
             self._selected = match if match else (self._rows[0] if self._rows else None)
         self._update_detail(full)
 
@@ -145,12 +158,26 @@ class ShopScreen(Screen):
             self.detail_body.text = ""
             self.btn_buy.disabled = True
             return
-        self.detail_title.text = f"[{row['kind_label']}] {row['name']}"
-        parts = [
-            row.get("stats_line") or "",
-            row.get("description") or "",
-            t("shop_price", name=row["name"], price=row["price"]),
-        ]
+        cmp = row.get("compare_mark") or ""
+        featured = t("shop_upgrade_offer") if row.get("featured") else ""
+        title = f"[{row['kind_label']}] {row['name']}"
+        if featured:
+            title = f"{featured} {title}"
+        if cmp:
+            title = f"{title}  {cmp}"
+        self.detail_title.text = title
+        parts = []
+        if featured:
+            parts.append(featured)
+        if cmp:
+            parts.append(f"{t('compare_with')} {cmp}")
+        parts.extend(
+            [
+                row.get("stats_line") or "",
+                row.get("description") or "",
+                t("shop_price", name=row["name"], price=row["price"]),
+            ]
+        )
         self.detail_body.text = "\n".join(p for p in parts if p)
         can_buy = bool(row.get("affordable", False)) and not inventory_full
         self.btn_buy.disabled = not can_buy
@@ -159,19 +186,27 @@ class ShopScreen(Screen):
         if not self._selected:
             return
         session = self._session()
-        # Resolve index by id in current shop list
+        # Prefer row identity so featured duplicate ids cannot mis-buy
         idx = next(
-            (i for i, r in enumerate(self._rows) if r["id"] == self._selected["id"]),
+            (i for i, r in enumerate(self._rows) if r is self._selected),
             -1,
         )
+        if idx < 0:
+            sel_item = self._selected.get("item")
+            idx = next(
+                (i for i, r in enumerate(self._rows) if r.get("item") is sel_item),
+                -1,
+            )
         if idx < 0:
             return
         ok, msg = session.buy_shop_item(idx)
         self.feedback.text = msg
-        keep_id = self._selected["id"]
-        self.refresh()
-        match = next((r for r in self._rows if r["id"] == keep_id), None)
-        self._selected = match if match else (self._rows[0] if self._rows else None)
+        # Stock already rebuilt inside buy_shop_item
+        self.refresh(rebuild_stock=False)
+        self._selected = next(
+            (r for r in self._rows if r.get("featured")),
+            self._rows[0] if self._rows else None,
+        )
         inv_count = len(session.inventory.items) if session.inventory else 0
         max_size = getattr(session.inventory, "max_size", 20)
         self._update_detail(inv_count >= max_size)

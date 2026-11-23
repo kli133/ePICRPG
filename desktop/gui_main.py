@@ -639,6 +639,7 @@ class RPGGame:
                 if self.player.can_use_ability(aid):
                     self.player.use_ability(aid, self.current_enemy)
                     if not self.current_enemy.is_alive():
+                        self.player._skip_cd_tick_once = False
                         self.combat_victory()
                     else:
                         self.enemy_turn()
@@ -1643,23 +1644,12 @@ class RPGGame:
                 idx = displayed_indices[sel]
                 item = self.inventory.items[idx]
                 
-                # Рассчитать цену продажи
-                try:
-                    from items import QUALITY_MULTIPLIER
-                except Exception:
-                    QUALITY_MULTIPLIER = {}
-                
-                base_price = getattr(item, 'price', 0)
-                level = getattr(item, 'level', 1)
-                quality = getattr(item, 'quality', 'wooden')
-                quality_mul = QUALITY_MULTIPLIER.get(quality, 0)
-                sell_price = int((base_price + level * 50) * (1 + quality_mul) * 0.5 + self.rotation * 10)
-                sell_price = int(sell_price * (1 + self.player.get_total_luck() * 0.02))
-                
-                # Подтверждение продажи
+                from items import calc_sell_price
+                sell_price = calc_sell_price(item, self.player, rotation=self.rotation)
+
                 response = messagebox.askyesno(
-                    "Продажа предмета",
-                    f"Продать {item.name} за {sell_price} золота?"
+                    t('sell_item_title'),
+                    t('sell_item_msg', name=item.name, price=sell_price),
                 )
                 
                 if response:
@@ -1899,79 +1889,194 @@ class RPGGame:
             return
         
         if self.player.stat_points <= 0:
-            messagebox.showinfo("Очки характеристик", "У вас нет доступных очков характеристик!")
+            messagebox.showinfo(t('stat_points_label'), t('no_stat_points'))
             return
-        
-        # Окно распределения
+
+        from player import Player as _Player
+
+        stat_ids = [
+            ('hp', t('stat_option_hp')),
+            ('attack', t('stat_option_attack')),
+            ('defense', t('stat_option_defense')),
+            ('fire_resist', t('stat_option_fire_resist')),
+            ('cold_resist', t('stat_option_cold_resist')),
+            ('luck', t('stat_option_luck')),
+            ('intellect', t('stat_option_intellect')),
+        ]
+        draft = {sid: 0 for sid, _ in stat_ids}
+
         stat_window = tk.Toplevel(self.root)
-        stat_window.title(f"Очки характеристик: {self.player.stat_points}")
-        stat_window.geometry("500x400")
+        stat_window.title(t('stat_points_title', pts=self.player.stat_points))
+        stat_window.geometry("520x520")
         stat_window.configure(bg=self.colors['bg'])
         stat_window.transient(self.root)
         stat_window.grab_set()
-        
-        tk.Label(
+
+        header = tk.Label(
             stat_window,
-            text=f"Доступно очков: {self.player.stat_points}",
+            text=f"{self.player.name} · {self.player.class_name} · Lv{self.player.level}",
             bg=self.colors['bg'],
             fg=self.colors['text_fg'],
-            font=('Arial', 12, 'bold')
-        ).pack(pady=10)
-        
-        stats = [
-            ("Здоровье (+15 HP)", lambda: self.add_stat('hp')),
-            ("Атака (+2)", lambda: self.add_stat('attack')),
-            ("Защита (+2)", lambda: self.add_stat('defense')),
-            ("Сопротивление огню (+2)", lambda: self.add_stat('fire_resist')),
-            ("Сопротивление холоду (+2)", lambda: self.add_stat('cold_resist')),
-            ("Удача (+1)", lambda: self.add_stat('luck')),
-            ("Интеллект (+1)", lambda: self.add_stat('intellect'))
-        ]
-        
-        def apply_stat(stat_func):
-            stat_func()
-            stat_window.destroy()
-            self.update_info_panel()
-            if self.player.stat_points > 0:
-                self.spend_stat_points()
-        
-        for text, func in stats:
-            btn = tk.Button(
-                stat_window,
-                text=text,
-                command=lambda f=func: apply_stat(f),
+            font=('Arial', 11, 'bold'),
+        )
+        header.pack(pady=(10, 4))
+
+        derived_var = tk.StringVar()
+        points_var = tk.StringVar()
+        value_vars = {}
+
+        def base_map():
+            p = self.player
+            return {
+                'hp': p.max_hp,
+                'attack': p.attack,
+                'defense': p.defense,
+                'fire_resist': getattr(p, 'fire_resist', 0),
+                'cold_resist': getattr(p, 'cold_resist', 0),
+                'luck': getattr(p, 'luck', 0),
+                'intellect': getattr(p, 'intellect', 0),
+            }
+
+        def refresh_labels():
+            used = sum(draft.values())
+            left = max(0, self.player.stat_points - used)
+            points_var.set(t('stat_points_draft', left=left, used=used))
+            base = base_map()
+            try:
+                art_luck = self.player.get_total_luck() - getattr(self.player, 'luck', 0)
+            except Exception:
+                art_luck = 0
+            luck = base['luck'] + draft['luck'] + art_luck
+            intellect = base['intellect'] + draft['intellect']
+            prev = _Player.stat_effect_preview(luck, intellect)
+            derived_var.set(
+                t(
+                    'stat_derived',
+                    evade=prev['evade_pct'],
+                    crit=prev['crit_pct'],
+                    xp=prev['xp_bonus_pct'],
+                )
+            )
+            for sid, var in value_vars.items():
+                b = base[sid]
+                d = draft[sid]
+                var.set(t('stat_value_draft', base=b, delta=d) if d else str(b))
+            confirm_btn.config(state=tk.NORMAL if used > 0 else tk.DISABLED)
+            reset_btn.config(state=tk.NORMAL if used > 0 else tk.DISABLED)
+
+        def bump(sid, step):
+            used = sum(draft.values())
+            if step > 0:
+                if used >= self.player.stat_points:
+                    return
+                draft[sid] += 1
+            else:
+                if draft[sid] <= 0:
+                    return
+                draft[sid] -= 1
+            refresh_labels()
+
+        tk.Label(
+            stat_window,
+            textvariable=derived_var,
+            bg=self.colors['bg'],
+            fg=self.colors['cyan'],
+            font=('Arial', 10),
+        ).pack(pady=2)
+        tk.Label(
+            stat_window,
+            textvariable=points_var,
+            bg=self.colors['bg'],
+            fg=self.colors['yellow'],
+            font=('Arial', 10, 'bold'),
+        ).pack(pady=4)
+
+        rows = tk.Frame(stat_window, bg=self.colors['bg'])
+        rows.pack(fill=tk.BOTH, expand=True, padx=12, pady=6)
+        for sid, label in stat_ids:
+            row = tk.Frame(rows, bg=self.colors['bg'])
+            row.pack(fill=tk.X, pady=3)
+            tk.Label(
+                row,
+                text=label,
+                bg=self.colors['bg'],
+                fg=self.colors['text_fg'],
+                font=('Arial', 10),
+                width=28,
+                anchor='w',
+            ).pack(side=tk.LEFT)
+            var = tk.StringVar()
+            value_vars[sid] = var
+            tk.Label(
+                row,
+                textvariable=var,
+                bg=self.colors['bg'],
+                fg=self.colors['text_fg'],
+                font=('Arial', 10),
+                width=12,
+            ).pack(side=tk.LEFT)
+            tk.Button(
+                row,
+                text='−',
+                width=3,
+                command=lambda s=sid: bump(s, -1),
                 bg=self.colors['button_bg'],
                 fg=self.colors['button_fg'],
-                font=('Arial', 10),
                 relief=tk.FLAT,
-                padx=20,
-                pady=10
-            )
-            btn.pack(fill=tk.X, padx=20, pady=3)
-    
+            ).pack(side=tk.LEFT, padx=2)
+            tk.Button(
+                row,
+                text='+',
+                width=3,
+                command=lambda s=sid: bump(s, +1),
+                bg=self.colors['button_bg'],
+                fg=self.colors['button_fg'],
+                relief=tk.FLAT,
+            ).pack(side=tk.LEFT, padx=2)
+
+        footer = tk.Frame(stat_window, bg=self.colors['bg'])
+        footer.pack(fill=tk.X, padx=12, pady=10)
+
+        def do_reset():
+            for k in draft:
+                draft[k] = 0
+            refresh_labels()
+
+        def do_confirm():
+            for sid, count in draft.items():
+                for _ in range(count):
+                    self.add_stat(sid)
+            stat_window.destroy()
+            self.update_info_panel()
+
+        reset_btn = tk.Button(
+            footer,
+            text=t('stat_reset'),
+            command=do_reset,
+            bg=self.colors['button_bg'],
+            fg=self.colors['button_fg'],
+            relief=tk.FLAT,
+            padx=12,
+            pady=6,
+        )
+        reset_btn.pack(side=tk.LEFT)
+        confirm_btn = tk.Button(
+            footer,
+            text=t('stat_confirm'),
+            command=do_confirm,
+            bg=self.colors['green'],
+            fg='white',
+            relief=tk.FLAT,
+            padx=12,
+            pady=6,
+        )
+        confirm_btn.pack(side=tk.RIGHT)
+        refresh_labels()
+
     def add_stat(self, stat_name):
         """Добавить очко к характеристике"""
-        if self.player.stat_points <= 0:
-            return
-        
-        if stat_name == 'hp':
-            self.player.max_hp += 15
-            self.player.hp += 15
-        elif stat_name == 'attack':
-            self.player.attack += 2
-        elif stat_name == 'defense':
-            self.player.defense += 2
-        elif stat_name == 'fire_resist':
-            self.player.fire_resist += 2
-        elif stat_name == 'cold_resist':
-            self.player.cold_resist += 2
-        elif stat_name == 'luck':
-            self.player.luck += 1
-        elif stat_name == 'intellect':
-            self.player.intellect += 1
-        
-        self.player.stat_points -= 1
-        self.print(f"Характеристика улучшена! Осталось очков: {self.player.stat_points}", 'green')
+        if self.player.apply_stat_spend(stat_name):
+            self.print(t('stat_improved', pts=self.player.stat_points), 'green')
     
     def show_shop(self):
         """Показать магазин"""
@@ -2119,29 +2224,37 @@ class RPGGame:
         ).pack(side=tk.RIGHT, padx=5)
     
     def rest(self):
-        """Отдохнуть"""
+        """Отдохнуть (дешёвый полный хил; цена растёт с престижем и ротацией)."""
         if not self.player:
-            messagebox.showwarning("Ошибка", "Сначала создайте персонажа!")
+            messagebox.showwarning(t('rest_title'), t('no_character'))
             return
-        
+
         if self.player.hp >= self.player.max_hp:
-            messagebox.showinfo("Отдых", "У вас уже максимальное здоровье!")
+            messagebox.showinfo(t('rest_title'), t('rest_full'))
             return
-        
-        cost = 20
-        if self.player.gold >= cost:
-            response = messagebox.askyesno(
-                "Отдохнуть?",
-                f"Отдых стоит {cost} золота. Восстановить HP до максимума?"
+
+        from player import calc_rest_cost
+        cost = calc_rest_cost(
+            getattr(self.player, 'prestige_level', 0),
+            getattr(self, 'rotation', 0),
+        )
+        if self.player.gold < cost:
+            messagebox.showwarning(t('rest_title'), t('rest_no_gold', cost=cost))
+            return
+
+        response = messagebox.askyesno(
+            t('rest_title'),
+            t('rest_msg', cost=cost),
+        )
+        if response:
+            self.player.gold -= cost
+            self.player.hp = self.player.max_hp
+            self.update_info_panel()
+            self.print(t('rested', cost=cost), 'green')
+            self.print(
+                t('restored_hp', hp=self.player.hp, max_hp=self.player.max_hp) + "\n",
+                'green',
             )
-            if response:
-                self.player.gold -= cost
-                self.player.hp = self.player.max_hp
-                self.update_info_panel()
-                self.print(f"Вы отдохнули в таверне за {cost} золота.", 'green')
-                self.print(f"Здоровье восстановлено: {self.player.hp}/{self.player.max_hp}\n", 'green')
-        else:
-            messagebox.showwarning("Недостаточно золота", f"Нужно {cost} золота!")
     
     def save_game_data(self):
         """Сохранить игру"""
@@ -2828,7 +2941,7 @@ class RPGGame:
         
         tk.Label(
             evade_frame,
-            text=f"(Удача: {self.player.get_total_luck()} × 0.5% + бонус артефакта)",
+            text=f"(Удача: {self.player.get_total_luck()} × 0.4%, softcap 40% + бонус артефакта)",
             bg=self.colors['text_bg'],
             fg=self.colors['text_fg'],
             font=('Arial', 9)
@@ -2849,7 +2962,7 @@ class RPGGame:
         
         tk.Label(
             crit_frame,
-            text=f"(Удача: {self.player.get_total_luck()} ÷ 3% + бонус артефакта, урон × 1.5)",
+            text=f"(Удача: {self.player.get_total_luck()} ÷ 4% + бонус артефакта, урон × 1.5)",
             bg=self.colors['text_bg'],
             fg=self.colors['text_fg'],
             font=('Arial', 9)
@@ -3605,20 +3718,32 @@ class RPGGame:
             if response is None:  # Отмена
                 return
             elif response:  # Да
-                # Autosave to reserved slot
+                # Autosave to reserved slot (never write a dead hero)
                 try:
-                    ok, msg = save_system.save_game_slot(self.player, self.inventory, self.rotation, self.victories, slot=save_system.MAX_SLOTS)
-                    if ok:
-                        self.print(msg, 'green')
+                    if self.player and self.player.is_alive():
+                        ok, msg = save_system.save_game_slot(
+                            self.player,
+                            self.inventory,
+                            self.rotation,
+                            self.victories,
+                            slot=save_system.MAX_SLOTS,
+                        )
+                        if ok:
+                            self.print(msg, 'green')
+                        else:
+                            self.print(msg, 'red')
                     else:
-                        self.print(msg, 'red')
+                        self.print(t('cannot_save_dead'), 'red')
                 except Exception:
                     # fallback to default save
-                    success, message = save_game(self.player, self.inventory, self.rotation, self.victories)
-                    if success:
-                        self.print(message, 'green')
-                    else:
-                        self.print(message, 'red')
+                    if self.player and self.player.is_alive():
+                        success, message = save_game(
+                            self.player, self.inventory, self.rotation, self.victories
+                        )
+                        if success:
+                            self.print(message, 'green')
+                        else:
+                            self.print(message, 'red')
         
         self.root.quit()
 

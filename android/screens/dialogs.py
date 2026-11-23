@@ -13,12 +13,26 @@ _game_over_open = False
 
 def _confirm(title, body, on_yes):
     box = BoxLayout(orientation="vertical", spacing=8, padding=8)
-    lbl = Label(text=body)
+    lbl = Label(
+        text=body,
+        halign="center",
+        valign="middle",
+        font_size="15sp",
+    )
+
+    def _fit_label(*_):
+        # Keep message inside popup; wrap long item names
+        w = max(lbl.width - 16, 40)
+        lbl.text_size = (w, None)
+        lbl.height = max(lbl.texture_size[1] + 8, 48)
+        lbl.size_hint_y = None
+
+    lbl.bind(size=_fit_label, texture_size=_fit_label)
     box.add_widget(lbl)
     row = BoxLayout(size_hint_y=None, height="48dp", spacing=8)
     yes = Button(text=t("yes"))
     no = Button(text=t("no"))
-    popup = Popup(title=title, content=box, size_hint=(0.85, 0.35))
+    popup = Popup(title=title, content=box, size_hint=(0.9, 0.42))
     yes.bind(on_release=lambda *_: (popup.dismiss(), on_yes()))
     no.bind(on_release=lambda *_: popup.dismiss())
     row.add_widget(yes)
@@ -36,11 +50,23 @@ def show_load_slots(session, manager, on_loaded=None, on_cancel=None):
     def rebuild():
         box.clear_widgets()
         slots = session.list_slots()
+        try:
+            import save_system as _save_system
+
+            autosave_slot = _save_system.MAX_SLOTS
+        except Exception:
+            autosave_slot = 5
         for slot, info in slots.items():
             row = BoxLayout(size_hint_y=None, height="48dp", spacing=6)
             pname = info.get("player_name") or "?"
             plevel = info.get("level") or "?"
-            if info.get("exists"):
+            if slot == autosave_slot:
+                label = t("autosave_slot_label")
+                if info.get("exists"):
+                    label = f"{label}: {pname} Lv{plevel}"
+                else:
+                    label = f"{label}: —"
+            elif info.get("exists"):
                 label = t("slot_label_filled", slot=slot, name=pname, level=plevel)
             else:
                 label = t("slot_label_empty", slot=slot)

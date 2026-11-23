@@ -55,7 +55,8 @@
 | Файл | Платформа |
 |------|-----------|
 | `ePICRPG.exe` | Windows (Python не нужен) |
-| `ePICRPG-2.2.9b-arm64-v8a-debug.apk` | Android **arm64** (USB debugging / установка APK) |
+| `ePICRPG-2.2.9b-arm64.apk` | Android **arm64** (обычная установка как игра) |
+| `ePICRPG-2.2.9b-arm64-v8a-debug.apk` | Android debug-сборка (для разработки) |
 
 ### Desktop из исходников
 
@@ -144,7 +145,10 @@ python desktop/build_exe.py
 ### Android APK
 
 ```bash
+# Debug
 wsl -d Ubuntu -- bash /mnt/c/Users/user/Desktop/rpg/android/wsl_build.sh
+# Release (подписанный)
+wsl -d Ubuntu -- bash /mnt/c/Users/user/Desktop/rpg/android/wsl_release.sh
 ```
 
 (пути подставьте свои; детали в [android/README.md](android/README.md).)

@@ -26,22 +26,25 @@ class SkillBook(Item):
         self.levels = levels
 
     def use(self, player):
-        meta = get_skill(self.skill_id)
+        skill_id = self.skill_id
+        if skill_id == "rogue_evade":
+            skill_id = "rogue_backstab"
+        meta = get_skill(skill_id)
         if not meta:
             print(t('unknown_skill'))
             return False
 
         # If not learned — learn
-        if self.skill_id not in getattr(player, 'skills', {}):
-            player.skills[self.skill_id] = 1
+        if skill_id not in getattr(player, 'skills', {}):
+            player.skills[skill_id] = 1
             # register ability entry
-            player.abilities[self.skill_id] = (meta['name'], meta['description'], meta.get('base_cooldown', 3))
-            player.ability_cooldowns[self.skill_id] = 0
+            player.abilities[skill_id] = (meta['name'], meta['description'], meta.get('base_cooldown', 3))
+            player.ability_cooldowns[skill_id] = 0
             print(t('learned_skill', name=meta['name']))
             return True
 
         # Already learned — try to upgrade by levels
-        cur = player.skills.get(self.skill_id, 0)
+        cur = player.skills.get(skill_id, 0)
         maxl = meta.get('max_level', 1)
         if cur >= maxl:
             print(t('skill_at_max', name=meta['name']))
@@ -49,7 +52,7 @@ class SkillBook(Item):
 
         # increase by one (or up to levels)
         new_level = min(maxl, cur + self.levels)
-        player.skills[self.skill_id] = new_level
+        player.skills[skill_id] = new_level
         print(t('skill_upgraded', name=meta['name'], level=new_level))
         return True
 
@@ -101,7 +104,12 @@ class Weapon(Item):
         
         # Проверяем каждое требование и применяем бонус, если требование выполнено
         for stat, requirement in self.requirements.items():
-            player_stat_value = getattr(player, stat, 0)
+            if stat == "agility" and hasattr(player, "get_total_agility"):
+                player_stat_value = player.get_total_agility()
+            elif stat == "luck" and hasattr(player, "get_total_luck"):
+                player_stat_value = player.get_total_luck()
+            else:
+                player_stat_value = getattr(player, stat, 0)
             if player_stat_value >= requirement:
                 # За каждый пункт выше требования даём 2% бонуса к основному бонусу
                 excess = player_stat_value - requirement
@@ -139,7 +147,12 @@ class Armor(Item):
         
         # Для каждого требования даём дополнительный бонус, если он выполнен
         for stat, requirement in self.requirements.items():
-            player_stat_value = getattr(player, stat, 0)
+            if stat == "agility" and hasattr(player, "get_total_agility"):
+                player_stat_value = player.get_total_agility()
+            elif stat == "luck" and hasattr(player, "get_total_luck"):
+                player_stat_value = player.get_total_luck()
+            else:
+                player_stat_value = getattr(player, stat, 0)
             if player_stat_value >= requirement:
                 excess = player_stat_value - requirement
                 # За каждый пункт выше требования даём 3% бонуса к защите (больше чем для оружия)
@@ -240,10 +253,11 @@ ITEMS_DATABASE = {
     'longsword': Weapon('Длинный меч', 18, 280),
     'legendary_sword': Weapon(t('sword_name'), 35, 1000),
     
-    # Оружие для Рогов (на ЛОВКОСТЬ/LUCK)
+    # Оружие для Разбойников (на ЛОВКОСТЬ/AGILITY)
     'wooden_bow': Weapon('Деревянный лук', 7, 80),
     'iron_bow': Weapon('Железный лук', 14, 200),
     'steel_bow': Weapon('Стальной лук', 22, 380),
+    'dagger': Weapon('Кинжал', 6, 70),
     
     # Оружие для Магов (на ИНТЕЛЛЕКТ)
     'wooden_staff': Weapon('Деревянный посох', 6, 90),
@@ -264,7 +278,7 @@ ITEMS_DATABASE = {
     'mystic_robe': Armor('Мистическая роба', 12, 240),
     'enchanted_robe': Armor('Зачарованная роба', 16, 380),
     
-    # Броня для Рогов (на ЛОВКОСТЬ/LUCK)
+    # Броня для Разбойников (на ЛОВКОСТЬ/AGILITY)
     'leather_armor_light': Armor('Лёгкая кожаная броня', 5, 90),
     'reinforced_leather': Armor('Укреплённая кожа', 10, 200),
     'shadow_leather': Armor('Теневая кожа', 14, 280),
@@ -275,7 +289,9 @@ ITEMS_DATABASE = {
     # Skill books
     'book_warrior_rage': SkillBook('warrior_rage', t('book_warrior_rage_name'), t('book_warrior_rage_desc'), 150),
     'book_mage_lightning': SkillBook('mage_lightning', t('book_mage_lightning_name'), t('book_mage_lightning_desc'), 160),
-    'book_rogue_evade': SkillBook('rogue_evade', t('book_rogue_evade_name'), t('book_rogue_evade_desc'), 120),
+    'book_rogue_backstab': SkillBook('rogue_backstab', t('book_rogue_backstab_name'), t('book_rogue_backstab_desc'), 120),
+    # Legacy book id — teaches backstab
+    'book_rogue_evade': SkillBook('rogue_backstab', t('book_rogue_backstab_name'), t('book_rogue_backstab_desc'), 120),
     # Legendary artifacts
     'artifact_blood_thorn': Artifact(t('artifact_blood_thorn_name'), t('artifact_blood_thorn_desc'), 2500, 'blood_thorn'),
     'artifact_storm_lens': Artifact(t('artifact_storm_lens_name'), t('artifact_storm_lens_desc'), 2500, 'storm_lens'),
@@ -307,9 +323,13 @@ EQUIPMENT_REQUIREMENTS = {
         'attack': 10,
     },
     
-    # Луки (на ЛОВКОСТЬ/LUCK - для Рогов)
+    # Луки (на ЛОВКОСТЬ/AGILITY - для Разбойников)
     'weapon.bow': {
-        'luck': 7,
+        'agility': 7,
+    },
+    # Кинжалы (на ЛОВКОСТЬ/AGILITY)
+    'weapon.dagger': {
+        'agility': 5,
     },
     
     # Посохи (на ИНТЕЛЛЕКТ - для Магов)
@@ -334,12 +354,12 @@ EQUIPMENT_REQUIREMENTS = {
         'intellect': 12,
     },
     
-    # Кожаная броня для Рогов (на ЛОВКОСТЬ/LUCK)
+    # Кожаная броня для Разбойников (на ЛОВКОСТЬ/AGILITY)
     'armor.leather': {
-        'luck': 6,
+        'agility': 6,
     },
     'armor.leather_heavy': {
-        'luck': 10,
+        'agility': 10,
     },
 }
 
@@ -356,10 +376,11 @@ WEAPON_TYPES = {
     # Боевые топоры (на СИЛУ)
     'battle_axe': 'axe',
     
-    # Луки (на ЛОВКОСТЬ)
+    # Луки / кинжалы (на ЛОВКОСТЬ)
     'wooden_bow': 'bow',
     'iron_bow': 'bow',
     'steel_bow': 'bow',
+    'dagger': 'dagger',
     
     # Посохи (на ИНТЕЛЛЕКТ)
     'wooden_staff': 'staff',
@@ -425,6 +446,23 @@ QUALITY_MULTIPLIER = {
     'luxury': 0.5,
     'dragon': 0.8,
 }
+
+
+def calc_sell_price(item, player, rotation=0) -> int:
+    """Sell value for inventory items (shared by console / desktop / Android)."""
+    base_price = getattr(item, "price", 0) or 0
+    level = getattr(item, "level", 1) or 1
+    quality = getattr(item, "quality", "wooden")
+    quality_mul = QUALITY_MULTIPLIER.get(quality, 0)
+    sell_price = int((base_price + level * 50) * (1 + quality_mul) * 0.5 + int(rotation or 0) * 10)
+    luck = 0
+    if player is not None:
+        try:
+            luck = player.get_total_luck()
+        except Exception:
+            luck = getattr(player, "luck", 0) or 0
+    sell_price = int(sell_price * (1 + luck * 0.02))
+    return max(0, sell_price)
 
 # Иконки для качеств
 QUALITY_ICONS = {
@@ -607,6 +645,42 @@ def get_item_scaled(item_id, rotation=0, player_level=1, quality=None, item_leve
     return get_item(item_id)
 
 
+def _artifact_stat_label(stat_id: str) -> str:
+    """Localized short name for artifact bonus stats."""
+    key = f"stat_{stat_id}"
+    label = t(key)
+    # t() returns the key itself when missing
+    if label == key:
+        return stat_id
+    return label
+
+
+def format_artifact_slot(slot: dict) -> str:
+    """One localized bonus line, e.g. '+5 Атака' / '+3% Крит'."""
+    stype = slot.get("type")
+    value = slot.get("value", 0)
+    if stype == "stat":
+        return t(
+            "artifact_slot_stat",
+            value=value,
+            stat=_artifact_stat_label(slot.get("stat", "")),
+        )
+    if stype == "crit":
+        return t("artifact_slot_pct", value=value, stat=t("stat_crit"))
+    if stype == "evade":
+        return t("artifact_slot_pct", value=value, stat=t("stat_evade"))
+    return t("artifact_slot_pct", value=value, stat=str(stype))
+
+
+def format_artifact_description(bonus_slots) -> str:
+    """Full localized artifact description from bonus_slots."""
+    slots = bonus_slots or []
+    if not slots:
+        return t("artifact_desc_empty")
+    slots_desc = ", ".join(format_artifact_slot(s) for s in slots)
+    return t("artifact_desc", count=len(slots), slots=slots_desc)
+
+
 def get_random_artifact(rotation=0, player_luck=0):
     """Генерировать случайный артефакт с бонусами.
     
@@ -634,7 +708,7 @@ def get_random_artifact(rotation=0, player_luck=0):
         
         if bonus_type == 'stat':
             # Выбираем случайную характеристику
-            stat_options = ['attack', 'defense', 'max_hp', 'intellect', 'luck', 'fire_resist', 'cold_resist']
+            stat_options = ['attack', 'defense', 'max_hp', 'intellect', 'luck', 'agility', 'fire_resist', 'cold_resist']
             stat = random.choice(stat_options)
             
             # Разные значения для разных характеристик
@@ -674,13 +748,7 @@ def get_random_artifact(rotation=0, player_luck=0):
         'Кольцо власти', 'Корона героя', 'Щит судьбы'
     ]
     name = random.choice(artifact_names)
-    
-    # Описание артефакта
-    slots_desc = ', '.join([
-        f"+{s['value']} {s.get('stat', s['type'])}" if s['type'] == 'stat' else f"+{s['value']}% {s['type']}"
-        for s in bonus_slots
-    ])
-    description = f"Артефакт с {len(bonus_slots)} слотом(и): {slots_desc}"
+    description = format_artifact_description(bonus_slots)
     
     price = 1500 + rotation * 500 + len(bonus_slots) * 300
     

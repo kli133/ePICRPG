@@ -4,9 +4,17 @@ from ui import progress_bar
 from locales import t
 from skills import get_skill
 
+ROGUE_PASSIVE_EVADE_CAP = 0.95
+
 
 class Player:
     """Класс игрока с характеристиками и системой прокачки"""
+
+    def _clamp_passive_evade(self):
+        """Keep rogue passive evade within [0, ROGUE_PASSIVE_EVADE_CAP]."""
+        self.passive_evade_chance = max(
+            0.0, min(ROGUE_PASSIVE_EVADE_CAP, float(self.passive_evade_chance or 0.0))
+        )
     
     def __init__(self, name, class_id=None):
         self.name = name
@@ -27,11 +35,12 @@ class Player:
         self.defense = 5
         # Очки для распределения
         self.stat_points = 0
-        # Новые характеристики: сопротивления, удача, интеллект
+        # Новые характеристики: сопротивления, удача, интеллект, ловкость
         self.fire_resist = 0
         self.cold_resist = 0
         self.luck = 0
         self.intellect = 0
+        self.agility = 0
 
         # Применяем бонусы класса (если есть)
         if self.class_obj:
@@ -44,6 +53,7 @@ class Player:
             self.cold_resist += getattr(self.class_obj, 'cold_resist_bonus', 0)
             self.luck += getattr(self.class_obj, 'luck_bonus', 0)
             self.intellect += getattr(self.class_obj, 'intellect_bonus', 0)
+            self.agility += getattr(self.class_obj, 'agility_bonus', 0)
         self.gold = 50
         
         # Экипировка
@@ -58,15 +68,21 @@ class Player:
         self.skills = {}
         # Очки навыков, выдаются при повышении уровня
         self.skill_points = 0
+        # Skip CD tick once after using an ability this turn
+        self._skip_cd_tick_once = False
         if self.class_obj and getattr(self.class_obj, 'ability', None):
             aid, aname, adesc, acd = self.class_obj.ability
             self.abilities[aid] = (aname, adesc, acd)
             self.ability_cooldowns[aid] = 0
+            self.skills[aid] = 1  # enable scaled skill path
         # Пассивные эффекты
-        # Для Разбойника — шанс пассивного уклонения
+        # Для Разбойника — шанс пассивного уклонения + ambush
         self.passive_evade_chance = 0.0
+        self.ambush_ready = False
+        self.fortune_active = False  # Lucky: +gold this fight
         if self.class_obj and self.class_obj.id == 'rogue':
-            self.passive_evade_chance = 0.10  # 10% базово
+            self.passive_evade_chance = 0.08  # 8% базово
+            self._clamp_passive_evade()
         self.stunned_turns = 0
         # Messages collected for mobile/UI combat log (also still cprinted).
         self.combat_messages = []
@@ -145,6 +161,24 @@ class Player:
         
         return total
 
+    def get_total_agility(self):
+        """Общая ловкость с учётом артефакта"""
+        total = getattr(self, "agility", 0) or 0
+        artifact = getattr(self, "artifact", None)
+        if artifact:
+            for slot in getattr(artifact, "bonus_slots", []):
+                if slot.get("type") == "stat" and slot.get("stat") == "agility":
+                    total += slot.get("value", 0)
+        return total
+
+    def begin_combat_passives(self):
+        """Call when a fight starts — reset fortune; arm rogue ambush."""
+        self.fortune_active = False
+        if self.class_obj and self.class_obj.id == "rogue":
+            self.ambush_ready = True
+        else:
+            self.ambush_ready = False
+
     def get_prestige_requirement(self):
         """Требуемый уровень для следующего престижа"""
         base = 50
@@ -208,6 +242,7 @@ class Player:
         self.cold_resist = 0
         self.luck = 0
         self.intellect = 0
+        self.agility = 0
 
         # Сбрасываем навыки и способности
         self.skills = {}
@@ -224,6 +259,8 @@ class Player:
         # Пассивные эффекты
         self.passive_evade_chance = 0.0
         self.evade = False
+        self.ambush_ready = False
+        self.fortune_active = False
 
         # Применяем бонусы класса (если есть)
         if self.class_obj:
@@ -235,57 +272,61 @@ class Player:
             self.cold_resist += getattr(self.class_obj, 'cold_resist_bonus', 0)
             self.luck += getattr(self.class_obj, 'luck_bonus', 0)
             self.intellect += getattr(self.class_obj, 'intellect_bonus', 0)
+            self.agility += getattr(self.class_obj, 'agility_bonus', 0)
 
         # Пассивные эффекты класса
         if self.class_obj and self.class_obj.id == 'rogue':
-            self.passive_evade_chance = 0.10
+            self.passive_evade_chance = 0.08
+            self._clamp_passive_evade()
 
         # Применить бонусы престижа к базовым статам
         self.apply_prestige_base_bonuses()
 
         # Восстановить классовую способность
+        self._skip_cd_tick_once = False
         if self.class_obj and getattr(self.class_obj, 'ability', None):
             aid, aname, adesc, acd = self.class_obj.ability
             self.abilities[aid] = (aname, adesc, acd)
             self.ability_cooldowns[aid] = 0
+            self.skills[aid] = 1
 
         return self.get_prestige_bonus()
     
     def get_evade_chance(self):
-        """Получить шанс уклонения на основе ловкости
-        
-        Каждая 2 единицы ловкости дают 1% шанса уклонения (без ограничения)
-        + бонум от артефакта
-        """
-        luck = self.get_total_luck()  # Используем удачу с учётом артефакта
-        base_evade = luck * 0.5  # По 0.5% за каждую ловкость
-        
-        # Добавляем бонус от артефакта
+        """Уклонение от ловкости: 0.4% за пункт + бонус артефакта, softcap 40%."""
+        agility = self.get_total_agility()
+        base_evade = agility * 0.4  # %
+
         artifact_bonus = 0
         artifact = getattr(self, 'artifact', None)
         if artifact and hasattr(artifact, 'get_evade_bonus'):
-            artifact_bonus = artifact.get_evade_bonus() * 100  # Конвертируем в проценты
-        
+            artifact_bonus = artifact.get_evade_bonus() * 100
+
         total_evade = base_evade + artifact_bonus
-        return total_evade / 100.0  # Без ограничения
+        return min(0.40, total_evade / 100.0)
+
+    def consume_ambush_multiplier(self) -> float:
+        """Rogue first-hit ambush; returns damage mult and clears flag."""
+        if getattr(self, "ambush_ready", False):
+            self.ambush_ready = False
+            return 1.6
+        return 1.0
     
     def get_crit_chance(self):
-        """Получить шанс критического удара на основе удачи
-        
-        Каждая 3 единицы удачи дают 1% шанса крита (без ограничения)
-        + бонус от артефакта
+        """Получить шанс критического удара на основе удачи.
+
+        1% за каждые 4 пункта удачи + бонус артефакта (без капа ниже 100%).
         """
-        luck = self.get_total_luck()  # Используем удачу с учётом артефакта
-        base_crit = luck / 3.0  # По 1% за каждые 3 ловкости
-        
-        # Добавляем бонус от артефакта
+        luck = self.get_total_luck()
+        base_crit = luck / 4.0  # %
+
         artifact_bonus = 0
         artifact = getattr(self, 'artifact', None)
         if artifact and hasattr(artifact, 'get_crit_bonus'):
-            artifact_bonus = artifact.get_crit_bonus() * 100  # Конвертируем в проценты
-        
+            artifact_bonus = artifact.get_crit_bonus() * 100
+
         total_crit = base_crit + artifact_bonus
-        return total_crit / 100.0  # Без ограничения
+        return total_crit / 100.0
     
     def check_evade(self):
         """Проверить, произойдет ли уклонение"""
@@ -342,9 +383,19 @@ class Player:
         
         # Пассивное уклонение Разбойника (в дополнение к основному)
         if self.class_obj and self.class_obj.id == 'rogue' and self.passive_evade_chance > 0:
+            self._clamp_passive_evade()
             if random.random() < self.passive_evade_chance:
                 self._cm(t('passive_evade'), 'cyan')
                 return 0
+
+        # Воин: при низком HP входящий урон ×0.9
+        if (
+            self.class_obj
+            and self.class_obj.id == "warrior"
+            and self.max_hp > 0
+            and self.hp < self.max_hp * 0.40
+        ):
+            damage = int(damage * 0.9)
 
         # Применяем сопротивления к элементальному урону до учёта брони
         if element == 'fire' and getattr(self, 'fire_resist', 0) > 0:
@@ -375,57 +426,97 @@ class Player:
             return False
 
         name, desc, cd = self.abilities[ability_id]
-        # Эффекты по id
-        # If this ability is a learned/upgradable skill, scale effects
         skill_meta = get_skill(ability_id)
         skill_level = self.skills.get(ability_id, 0)
         if skill_meta and skill_level > 0:
-            # compute multiplier from base + stat scaling and level
             stat = skill_meta.get('stat')
             stat_val = getattr(self, stat, 0) if stat else 0
             base = skill_meta.get('base_multiplier', 1.0)
             stat_scale = skill_meta.get('stat_scale', 0.0)
-            # level contributes linearly to multiplier
             level_bonus = 1.0 + 0.1 * (skill_level - 1)
             multiplier = base * level_bonus * (1.0 + stat_val * stat_scale)
 
             if ability_id == 'warrior_rage':
                 damage = int(self.get_total_attack() * multiplier)
-                # armor penetration increases with skill level (ignore a portion of enemy defense)
                 pen = max(0, (0.5 + 0.05 * (skill_level - 1)))
                 effective_def = int(max(0, enemy.defense * (1.0 - pen)))
                 actual = max(1, damage - effective_def)
                 enemy.hp -= actual
                 self.apply_artifact_on_hit(enemy, actual)
-                self._cm(t('you_attack', name=name, damage=actual), 'yellow')
+                self._cm(
+                    t(
+                        'ability_hit',
+                        ability=name,
+                        name=enemy.name,
+                        damage=actual,
+                        hp=max(0, enemy.hp),
+                        max_hp=enemy.max_hp,
+                    ),
+                    'yellow',
+                )
             elif ability_id == 'mage_lightning':
                 damage = int(self.get_total_attack() * multiplier) + int(self.intellect * 0.5 * skill_level)
                 actual = max(1, damage - enemy.defense)
                 enemy.hp -= actual
                 self.apply_artifact_on_hit(enemy, actual)
-                # stun duration scales with level
                 enemy.stunned_turns = max(1, getattr(enemy, 'stunned_turns', 0) + 1 + (skill_level // 2))
                 self._cm(
-                    t('you_attack', name=name, damage=actual)
+                    t(
+                        'ability_hit',
+                        ability=name,
+                        name=enemy.name,
+                        damage=actual,
+                        hp=max(0, enemy.hp),
+                        max_hp=enemy.max_hp,
+                    )
                     + ' '
                     + t('enemy_stunned', name=enemy.name),
                     'magenta',
                 )
-            elif ability_id == 'rogue_evade':
-                # evade becomes chance-based buff; higher skill gives higher passive chance
-                self.evade = True
-                # also increase passive evade chance slightly per skill level
-                self.passive_evade_chance = max(self.passive_evade_chance, 0.10 + 0.02 * (skill_level - 1))
-                self._cm(t('ability') + f" {name}: " + t('evade_success'), 'cyan')
+            elif ability_id in ('rogue_backstab', 'rogue_evade'):
+                damage = int(self.get_total_attack() * (1.6 + 0.15 * (skill_level - 1)))
+                amb = self.consume_ambush_multiplier()
+                if amb > 1.0:
+                    damage = int(damage * amb)
+                    self._cm(t("ambush_proc"), "cyan")
+                effective_def = int(max(0, enemy.defense * 0.70))
+                actual = max(1, damage - effective_def)
+                enemy.hp -= actual
+                self.apply_artifact_on_hit(enemy, actual)
+                self._cm(
+                    t(
+                        "ability_hit",
+                        ability=name,
+                        name=enemy.name,
+                        damage=actual,
+                        hp=max(0, enemy.hp),
+                        max_hp=enemy.max_hp,
+                    ),
+                    "yellow",
+                )
+            elif ability_id == 'lucky_fortune':
+                self.fortune_active = True
+                self._cm(t("fortune_active_msg", ability=name), "yellow")
+            else:
+                self._cm(t('ability_not_implemented'))
+                return False
         else:
-            # fallback to legacy hardcoded abilities
             if ability_id == 'warrior_rage':
                 damage = int(self.get_total_attack() * 1.8)
-                # игнорируем половину защиты врага
                 actual = max(1, damage - max(0, enemy.defense // 2))
                 enemy.hp -= actual
                 self.apply_artifact_on_hit(enemy, actual)
-                self._cm(t('you_attack', name=name, damage=actual), 'yellow')
+                self._cm(
+                    t(
+                        'ability_hit',
+                        ability=name,
+                        name=enemy.name,
+                        damage=actual,
+                        hp=max(0, enemy.hp),
+                        max_hp=enemy.max_hp,
+                    ),
+                    'yellow',
+                )
             elif ability_id == 'mage_lightning':
                 damage = int(self.get_total_attack() * 1.5) + 5
                 actual = max(1, damage - enemy.defense)
@@ -433,20 +524,48 @@ class Player:
                 self.apply_artifact_on_hit(enemy, actual)
                 enemy.stunned_turns = max(1, getattr(enemy, 'stunned_turns', 0) + 1)
                 self._cm(
-                    t('you_attack', name=name, damage=actual)
+                    t(
+                        'ability_hit',
+                        ability=name,
+                        name=enemy.name,
+                        damage=actual,
+                        hp=max(0, enemy.hp),
+                        max_hp=enemy.max_hp,
+                    )
                     + ' '
                     + t('enemy_stunned', name=enemy.name),
                     'magenta',
                 )
-            elif ability_id == 'rogue_evade':
-                self.evade = True
-                self._cm(t('ability') + f" {name}: " + t('evade_success'), 'cyan')
+            elif ability_id == 'rogue_backstab':
+                damage = int(self.get_total_attack() * 1.6)
+                amb = self.consume_ambush_multiplier()
+                if amb > 1.0:
+                    damage = int(damage * amb)
+                    self._cm(t("ambush_proc"), "cyan")
+                actual = max(1, damage - int(max(0, enemy.defense * 0.70)))
+                enemy.hp -= actual
+                self.apply_artifact_on_hit(enemy, actual)
+                self._cm(
+                    t(
+                        "ability_hit",
+                        ability=name,
+                        name=enemy.name,
+                        damage=actual,
+                        hp=max(0, enemy.hp),
+                        max_hp=enemy.max_hp,
+                    ),
+                    "yellow",
+                )
+            elif ability_id == 'lucky_fortune':
+                self.fortune_active = True
+                self._cm(t("fortune_active_msg", ability=name), "yellow")
             else:
                 self._cm(t('ability_not_implemented'))
                 return False
 
-        # Устанавливаем перезарядку
         self.ability_cooldowns[ability_id] = cd
+        # Do not tick this ability's CD down in the same turn's reduce_cooldowns()
+        self._skip_cd_tick_once = True
         return True
 
     def learn_skill(self, skill_id):
@@ -487,6 +606,9 @@ class Player:
         return {'ok': True, 'skill': skill_id, 'level': self.skills[skill_id]}
 
     def reduce_cooldowns(self):
+        if getattr(self, '_skip_cd_tick_once', False):
+            self._skip_cd_tick_once = False
+            return
         for aid in list(self.ability_cooldowns.keys()):
             if self.ability_cooldowns[aid] > 0:
                 self.ability_cooldowns[aid] -= 1
@@ -541,20 +663,64 @@ class Player:
             self.defense += 1
             cprint(t('ability') + ': ' + 'Warrior passive +1 defense', 'cyan')
         elif cid == 'mage':
-            # Маг получает дополнительную силу атаки
-            self.attack += 2
-            cprint(t('ability') + ': ' + 'Mage passive +2 attack', 'magenta')
+            self.intellect += 1
+            cprint(t('ability') + ': ' + 'Mage passive +1 intellect', 'magenta')
         elif cid == 'rogue':
-            # Разбойник повышает пассивный шанс уклонения
+            # Разбойник повышает пассивный шанс уклонения (кап 95%)
             self.passive_evade_chance += 0.01
+            self._clamp_passive_evade()
             cprint(t('ability') + f": Rogue passive evade {self.passive_evade_chance:.2%}", 'cyan')
+        elif cid == 'lucky':
+            self.luck += 1
+            cprint(t('ability') + ': ' + 'Lucky passive +1 luck', 'yellow')
     
+    def apply_stat_spend(self, stat_id: str) -> bool:
+        """Spend one available stat point on ``stat_id``. Shared by CLI/desktop/Android."""
+        if self.stat_points <= 0:
+            return False
+        if stat_id == "hp":
+            self.max_hp += 15
+            self.hp += 15
+        elif stat_id == "attack":
+            self.attack += 2
+        elif stat_id == "defense":
+            self.defense += 2
+        elif stat_id == "fire_resist":
+            self.fire_resist += 2
+        elif stat_id == "cold_resist":
+            self.cold_resist += 2
+        elif stat_id == "luck":
+            self.luck += 1
+        elif stat_id == "intellect":
+            self.intellect += 1
+        elif stat_id == "agility":
+            self.agility += 1
+        else:
+            return False
+        self.stat_points -= 1
+        return True
+
+    @staticmethod
+    def stat_effect_preview(luck: int = 0, intellect: int = 0, agility: int = 0) -> dict:
+        """Derived combat/economy percentages (evade=agility, crit=luck)."""
+        evade = min(0.40, (agility or 0) * 0.4 / 100.0)
+        crit = (luck or 0) / 4.0 / 100.0
+        xp_bonus = (intellect or 0) * 0.05
+        return {
+            "evade": evade,
+            "crit": crit,
+            "xp_bonus": xp_bonus,
+            "evade_pct": evade * 100.0,
+            "crit_pct": crit * 100.0,
+            "xp_bonus_pct": xp_bonus * 100.0,
+        }
+
     def spend_stat_points(self):
-        """Распределить очки характеристик"""
+        """Распределить очки характеристик (console)."""
         if self.stat_points <= 0:
             print(t('no_stat_points'))
             return
-        
+
         print(f"\n{t('stat_points_available', pts=self.stat_points)}")
         print(f"1. {t('stat_option_hp')}")
         print(f"2. {t('stat_option_attack')}")
@@ -563,38 +729,22 @@ class Player:
         print(f"5. {t('stat_option_cold_resist')}")
         print(f"6. {t('stat_option_luck')}")
         print(f"7. {t('stat_option_intellect')}")
+        print(f"8. {t('stat_option_agility')}")
         print("0. Back")
 
         choice = input("\n" + t('choose_action'))
-        
-        if choice == '1' and self.stat_points > 0:
-            self.max_hp += 15
-            self.hp += 15
-            self.stat_points -= 1
-            print(t('stat_improved', pts=self.stat_points))
-        elif choice == '2' and self.stat_points > 0:
-            self.attack += 2
-            self.stat_points -= 1
-            print(t('stat_improved', pts=self.stat_points))
-        elif choice == '3' and self.stat_points > 0:
-            self.defense += 2
-            self.stat_points -= 1
-            print(t('stat_improved', pts=self.stat_points))
-        elif choice == '4' and self.stat_points > 0:
-            self.fire_resist += 2
-            self.stat_points -= 1
-            print(t('stat_improved', pts=self.stat_points))
-        elif choice == '5' and self.stat_points > 0:
-            self.cold_resist += 2
-            self.stat_points -= 1
-            print(t('stat_improved', pts=self.stat_points))
-        elif choice == '6' and self.stat_points > 0:
-            self.luck += 1
-            self.stat_points -= 1
-            print(t('stat_improved', pts=self.stat_points))
-        elif choice == '7' and self.stat_points > 0:
-            self.intellect += 1
-            self.stat_points -= 1
+        mapping = {
+            '1': 'hp',
+            '2': 'attack',
+            '3': 'defense',
+            '4': 'fire_resist',
+            '5': 'cold_resist',
+            '6': 'luck',
+            '7': 'intellect',
+            '8': 'agility',
+        }
+        stat_id = mapping.get(choice)
+        if stat_id and self.apply_stat_spend(stat_id):
             print(t('stat_improved', pts=self.stat_points))
     
     def show_stats(self):
@@ -619,6 +769,7 @@ class Player:
         cprint(f"Сопротивление холоду: {getattr(self, 'cold_resist', 0)}%", 'blue')
         cprint(f"Удача: {getattr(self, 'luck', 0)}", 'yellow')
         cprint(f"Интеллект: {getattr(self, 'intellect', 0)}", 'magenta')
+        cprint(f"Ловкость: {self.get_total_agility()}", 'cyan')
         cprint(f"Золото: {self.gold}", 'yellow')
         cprint(f"Очки характеристик: {self.stat_points}", 'cyan')
         cprint(f"Артефакт: {self.artifact.name if self.artifact else 'Нет'}", 'cyan')
@@ -658,3 +809,11 @@ class Player:
             if random.random() < 0.15:
                 enemy.stunned_turns = max(1, getattr(enemy, 'stunned_turns', 0) + 1)
                 self._cm(t('artifact_stun'), 'cyan')
+
+
+def calc_rest_cost(prestige_level: int = 0, rotation: int = 0) -> int:
+    """Cheap full heal between fights; grows with prestige and rotation.
+
+    P0 R0 = 5; +3 per prestige; +2 per rotation.
+    """
+    return max(1, 5 + int(prestige_level or 0) * 3 + int(rotation or 0) * 2)

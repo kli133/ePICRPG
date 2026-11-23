@@ -237,36 +237,23 @@ class Inventory:
         if should_remove:
             self.remove_item(item)
 
-    def sell_item(self, index, player, rotation=0):
+    def sell_item(self, index, player, rotation=0, confirm=True):
         """Продать предмет из инвентаря. Добавляет золото игроку и удаляет предмет."""
         if index < 0 or index >= len(self.items):
             cprint("Неверный номер предмета!", 'red')
             return False
 
         item = self.items[index]
-        # Определяем цену продажи
-        try:
-            from items import QUALITY_MULTIPLIER
-        except Exception:
-            QUALITY_MULTIPLIER = {}
+        from items import calc_sell_price
+        sell_price = calc_sell_price(item, player, rotation=rotation)
 
-        base_price = getattr(item, 'price', 0)
-        level = getattr(item, 'level', 1)
-        quality = getattr(item, 'quality', 'wooden')
-        quality_mul = QUALITY_MULTIPLIER.get(quality, 0)
+        if confirm:
+            cprint(t('sell_will_get', price=sell_price, name=item.name), 'yellow')
+            answer = input(t('sell_confirm_prompt'))
+            if answer.lower() not in ('y', 'yes'):
+                cprint(t('sale_cancelled'), 'cyan')
+                return False
 
-        # Формула: (base + level*50) * (1 + quality_mul) * 0.5, + небольшая премия за ротацию
-        sell_price = int((base_price + level * 50) * (1 + quality_mul) * 0.5 + rotation * 10)
-        # Учитываем удачу продавца (немного увеличивает выручку)
-        sell_price = int(sell_price * (1 + getattr(player, 'luck', 0) * 0.02))
-
-        cprint(t('sell_will_get', price=sell_price, name=item.name), 'yellow')
-        confirm = input(t('sell_confirm_prompt'))
-        if confirm.lower() not in ('y', 'yes'):
-            cprint(t('sale_cancelled'), 'cyan')
-            return False
-
-        # Продажа
         player.gold += sell_price
         self.remove_item(item)
         cprint(t('item_sold_console', gold=sell_price), 'green')

@@ -42,8 +42,15 @@ class MenuScreen(Screen):
         self.btn_new = self._btn("", self._new_game)
         self.btn_load = self._btn("", self._load_game)
         self.btn_lang = self._btn("", self._toggle_lang)
+        self.btn_music = self._btn("", self._toggle_music)
         self.btn_quit = self._btn("", self._quit)
-        for b in (self.btn_new, self.btn_load, self.btn_lang, self.btn_quit):
+        for b in (
+            self.btn_new,
+            self.btn_load,
+            self.btn_lang,
+            self.btn_music,
+            self.btn_quit,
+        ):
             content.add_widget(b)
 
         self.add_widget(themed_root("bg_menu.jpg", content))
@@ -52,12 +59,18 @@ class MenuScreen(Screen):
     def on_pre_enter(self, *_):
         self._refresh_ui()
 
+    def _music(self):
+        return getattr(App.get_running_app(), "music", None)
+
     def _refresh_ui(self):
         lang = get_locale().upper()
         self.title.text = f"ePICRPG [{lang}]"
         self.btn_new.text = t("menu_new_game")
         self.btn_load.text = t("menu_load_game")
         self.btn_lang.text = t("menu_language", lang=lang)
+        music = self._music()
+        on = True if music is None else bool(getattr(music, "enabled", True))
+        self.btn_music.text = t("menu_music_on") if on else t("menu_music_off")
         self.btn_quit.text = t("menu_quit")
 
     def _btn(self, text, handler):
@@ -83,6 +96,15 @@ class MenuScreen(Screen):
         session = self._session()
         nxt = "en" if get_locale() == "ru" else "ru"
         session.set_language(nxt)
+        self._refresh_ui()
+
+    def _toggle_music(self, *_):
+        music = self._music()
+        if music is None:
+            return
+        enabled = not bool(music.enabled)
+        music.set_enabled(enabled)
+        self._session().set_music_enabled(enabled)
         self._refresh_ui()
 
     def _quit(self, *_):

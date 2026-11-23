@@ -24,6 +24,10 @@ android/.buildozer/
 android/bin/
 *.apk
 *.aab
+# Release signing (never commit)
+android/*.keystore
+android/*keystore*
+android/release.properties
 
 # Node (local tooling)
 node_modules/

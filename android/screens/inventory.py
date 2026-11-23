@@ -7,6 +7,7 @@ from kivy.uix.screenmanager import Screen
 from kivy.uix.scrollview import ScrollView
 
 from locales import t
+from screens.dialogs import _confirm
 from ui_theme import panel, themed_root
 
 
@@ -42,11 +43,13 @@ class InventoryScreen(Screen):
 
         self.list_inner = BoxLayout(orientation="vertical", spacing=6, size_hint_y=None)
         self.list_inner.bind(minimum_height=self.list_inner.setter("height"))
-        self.list_scroll = ScrollView(size_hint=(1, 0.42))
+        self.list_scroll = ScrollView(size_hint=(1, 0.38))
         self.list_scroll.add_widget(self.list_inner)
         content.add_widget(panel(self.list_scroll, alpha=0.5))
 
-        detail = BoxLayout(orientation="vertical", spacing=6, size_hint_y=None, height="150dp")
+        self.detail = BoxLayout(
+            orientation="vertical", spacing=6, size_hint_y=None, height="200dp"
+        )
         self.detail_title = Label(
             text="",
             size_hint_y=None,
@@ -59,19 +62,34 @@ class InventoryScreen(Screen):
         self.detail_body = Label(
             text="",
             size_hint_y=None,
-            height="56dp",
+            height="72dp",
             font_size="13sp",
             halign="left",
             valign="top",
         )
-        self.detail_body.bind(size=lambda i, v: setattr(i, "text_size", (i.width, None)))
-        self.btn_action = Button(text="", size_hint_y=None, height="48dp", font_size="16sp")
+        self.detail_body.bind(size=self._fit_detail_body)
+        self.detail_body.bind(texture_size=self._fit_detail_body)
+        actions = BoxLayout(size_hint_y=None, height="48dp", spacing=8)
+        self.btn_action = Button(text="", font_size="15sp")
         self.btn_action.bind(on_release=self._do_action)
         self.btn_action.disabled = True
-        detail.add_widget(self.detail_title)
-        detail.add_widget(self.detail_body)
-        detail.add_widget(self.btn_action)
-        content.add_widget(panel(detail, alpha=0.55))
+        self.btn_sell = Button(
+            text="",
+            font_size="14sp",
+            halign="center",
+            valign="middle",
+        )
+        self.btn_sell.bind(
+            size=lambda i, _v: setattr(i, "text_size", (i.width - 10, i.height))
+        )
+        self.btn_sell.bind(on_release=self._do_sell)
+        self.btn_sell.disabled = True
+        actions.add_widget(self.btn_action)
+        actions.add_widget(self.btn_sell)
+        self.detail.add_widget(self.detail_title)
+        self.detail.add_widget(self.detail_body)
+        self.detail.add_widget(actions)
+        content.add_widget(panel(self.detail, alpha=0.55))
 
         self.feedback = Label(
             text="",
@@ -92,6 +110,18 @@ class InventoryScreen(Screen):
 
     def _session(self):
         return App.get_running_app().session
+
+    def _fit_detail_body(self, *_):
+        """Grow detail body so sell price is not clipped by action buttons."""
+        lbl = self.detail_body
+        if lbl.width > 40:
+            lbl.text_size = (lbl.width, None)
+        h = max(int(lbl.texture_size[1]) + 8, 56)
+        # Cap so list still has room on small phones
+        h = min(h, 120)
+        lbl.height = h
+        # title + body + actions + spacings
+        self.detail.height = 28 + h + 48 + 18
 
     def on_pre_enter(self, *_):
         self._selected = None
@@ -128,12 +158,38 @@ class InventoryScreen(Screen):
             empty.bind(size=lambda i, v: setattr(i, "text_size", (i.width, None)))
             self.list_inner.add_widget(empty)
         else:
+            section_keys = {
+                "weapon": "inv_section_weapon",
+                "armor": "inv_section_armor",
+                "artifact": "inv_section_artifact",
+                "potion": "inv_section_potion",
+                "item": "inv_section_other",
+            }
+            last_kind = None
             for row in rows:
+                kind = row.get("kind") or "item"
+                if kind != last_kind:
+                    last_kind = kind
+                    sec = Label(
+                        text=t(section_keys.get(kind, "inv_section_other")),
+                        size_hint_y=None,
+                        height="28dp",
+                        font_size="12sp",
+                        halign="left",
+                        valign="middle",
+                        bold=True,
+                    )
+                    sec.bind(
+                        size=lambda i, v: setattr(i, "text_size", (i.width, None))
+                    )
+                    self.list_inner.add_widget(sec)
                 mark = t("equipped_mark") if row["equipped"] else ""
                 stats = row.get("stats_line") or ""
-                text = f"[{row['kind_label']}] {row['name']}{mark}"
-                if stats:
-                    text = f"{text}\n{stats}"
+                cmp = row.get("compare_mark") or ""
+                text = f"{row['name']}{mark}"
+                extras = "  ".join(p for p in (stats, cmp) if p)
+                if extras:
+                    text = f"{text}\n{extras}"
                 btn = Button(
                     text=text,
                     size_hint_y=None,
@@ -147,7 +203,6 @@ class InventoryScreen(Screen):
                 self.list_inner.add_widget(btn)
                 self._row_buttons.append((btn, row["index"]))
 
-        # Keep selection if still valid
         if self._selected is not None:
             still = next((r for r in rows if r["index"] == self._selected["index"]), None)
             if still:
@@ -170,17 +225,38 @@ class InventoryScreen(Screen):
             self.detail_body.text = t("inventory_empty_msg") if not self._row_buttons else ""
             self.btn_action.text = t("equip")
             self.btn_action.disabled = True
+            self.btn_sell.text = t("sell")
+            self.btn_sell.disabled = True
+            self._fit_detail_body()
             return
         mark = t("equipped_mark") if row["equipped"] else ""
         stats = row.get("stats_line") or ""
-        self.detail_title.text = f"[{row['kind_label']}] {row['name']}{mark}"
-        parts = [stats, row.get("description") or ""]
+        cmp = row.get("compare_mark") or ""
+        price = int(row.get("sell_price") or 0)
+        title = f"[{row['kind_label']}] {row['name']}{mark}"
+        if cmp:
+            title = f"{title}  {cmp}"
+        self.detail_title.text = title
+        # Keep body short: compare + stats; price lives on the Sell button
+        parts = []
+        if cmp and not row["equipped"]:
+            parts.append(f"{t('compare_with')} {cmp}")
+        if stats:
+            parts.append(stats)
+        desc = row.get("description") or ""
+        if desc and desc != stats:
+            parts.append(desc)
+        if row["equipped"]:
+            parts.append(t("cannot_sell_equipped"))
         self.detail_body.text = "\n".join(p for p in parts if p)
         if row["kind"] == "potion":
             self.btn_action.text = t("use")
         else:
             self.btn_action.text = t("equip")
         self.btn_action.disabled = False
+        self.btn_sell.text = t("sell_btn_price", price=price)
+        self.btn_sell.disabled = bool(row["equipped"])
+        self._fit_detail_body()
 
     def _do_action(self, *_):
         if not self._selected:
@@ -189,7 +265,6 @@ class InventoryScreen(Screen):
         idx = self._selected["index"]
         ok, msg = session.equip_or_use_item(idx)
         self.feedback.text = msg
-        # Prefer selecting same kind/name after refresh if indices shift
         name = self._selected["name"]
         self.refresh()
         rows = session.list_inventory()
@@ -203,6 +278,30 @@ class InventoryScreen(Screen):
         self._update_detail()
         if not ok:
             self.feedback.text = str(msg)
+
+    def _do_sell(self, *_):
+        if not self._selected:
+            return
+        row = self._selected
+        if row.get("equipped"):
+            self.feedback.text = t("cannot_sell_equipped")
+            return
+        price = int(row.get("sell_price") or 0)
+        idx = row["index"]
+
+        def _yes():
+            ok, msg = self._session().sell_item(idx)
+            self.feedback.text = msg
+            self._selected = None
+            self.refresh()
+            if not ok:
+                self.feedback.text = str(msg)
+
+        _confirm(
+            t("sell_item_title"),
+            t("sell_item_msg", name=row["name"], price=price),
+            _yes,
+        )
 
     def _back(self, *_):
         self.manager.current = "hub"

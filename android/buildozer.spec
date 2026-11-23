@@ -13,7 +13,7 @@ package.domain = org.epicrpg
 source.dir = ..
 
 # (list) Source files to include (let empty to include all the files)
-source.include_exts = py,png,jpg,kv,atlas,json,ttf,otf
+source.include_exts = py,png,jpg,kv,atlas,json,ttf,otf,wav,ogg,mp3
 
 # (list) List of inclusions using patterns matching directories
 source.include_patterns = android/*,android/assets/*,android/assets/fonts/*,android/screens/*,core/*,*.py
@@ -57,6 +57,9 @@ android.archs = arm64-v8a
 
 # Copy libraries instead of using big APK packaging quirks
 android.copy_libs = 1
+
+# Sideload / GitHub Releases need APK (default is aab for Play Store)
+android.release_artifact = apk
 
 [buildozer]
 

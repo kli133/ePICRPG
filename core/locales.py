@@ -254,6 +254,18 @@ LOCALES['en'].update({
     'stat_separator': '{sep}',
     'stat_improved': 'Stat improved! Remaining points: {pts}',
     'rested': 'You rested at the tavern for {cost} gold.',
+    'rest_full': 'HP is already full.',
+    'rest_no_gold': 'Not enough gold (need {cost}).',
+    'rest_btn': 'Rest ({cost}g)',
+    'inv_section_weapon': '— Weapons —',
+    'inv_section_armor': '— Armor —',
+    'inv_section_artifact': '— Artifacts —',
+    'inv_section_potion': '— Potions —',
+    'inv_section_other': '— Other —',
+    'inv_better': '▲ +{delta}',
+    'inv_worse': '▼ {delta}',
+    'inv_same': '=',
+    'inv_upgrade_empty': '▲ new',
     'restored_hp': 'HP restored: {hp}/{max_hp}',
     'theme_dark': 'Dark',
     'theme_light': 'Light',
@@ -270,13 +282,14 @@ LOCALES['en'].update({
     'status_cd': 'cooldown {rc}',
     'default_hero_name': 'Hero',
     'stat_option_hp': 'Health (+15 HP)',
-    'stat_option_attack': 'Attack (+2)',
+    'stat_option_attack': 'Strength (+2)',
     'stat_option_defense': 'Defense (+2)',
     'stat_option_fire_resist': 'Fire Resist (+2)',
     'stat_option_cold_resist': 'Cold Resist (+2)',
     'stat_option_luck': 'Luck (+1)',
-    'stat_option_intellect': 'Intellect (+1)'
-    , 'need_gold': 'Need {price} gold!'
+    'stat_option_intellect': 'Intellect (+1)',
+    'stat_option_agility': 'Agility (+1)',
+    'need_gold': 'Need {price} gold!',
 })
 
 LOCALES['ru'].update({
@@ -332,6 +345,18 @@ LOCALES['ru'].update({
     'stat_separator': '{sep}',
     'stat_improved': 'Характеристика улучшена! Осталось очков: {pts}',
     'rested': 'Вы отдохнули в таверне за {cost} золота.',
+    'rest_full': 'Здоровье уже полное.',
+    'rest_no_gold': 'Не хватает золота (нужно {cost}).',
+    'rest_btn': 'Отдых ({cost}з)',
+    'inv_section_weapon': '— Оружие —',
+    'inv_section_armor': '— Броня —',
+    'inv_section_artifact': '— Артефакты —',
+    'inv_section_potion': '— Зелья —',
+    'inv_section_other': '— Прочее —',
+    'inv_better': '▲ +{delta}',
+    'inv_worse': '▼ {delta}',
+    'inv_same': '=',
+    'inv_upgrade_empty': '▲ новое',
     'restored_hp': 'Здоровье восстановлено: {hp}/{max_hp}',
     'theme_dark': 'Темная',
     'theme_light': 'Светлая',
@@ -348,13 +373,14 @@ LOCALES['ru'].update({
     'status_cd': 'перезарядка {rc}',
     'default_hero_name': 'Герой',
     'stat_option_hp': 'Здоровье (+15 HP)',
-    'stat_option_attack': 'Атака (+2)',
+    'stat_option_attack': 'Сила (+2)',
     'stat_option_defense': 'Защита (+2)',
     'stat_option_fire_resist': 'Сопротивление огню (+2)',
     'stat_option_cold_resist': 'Сопротивление холоду (+2)',
     'stat_option_luck': 'Удача (+1)',
-    'stat_option_intellect': 'Интеллект (+1)'
-    , 'need_gold': 'Нужно {price} золота!'
+    'stat_option_intellect': 'Интеллект (+1)',
+    'stat_option_agility': 'Ловкость (+1)',
+    'need_gold': 'Нужно {price} золота!',
 })
 
 # Upgrade dialog fragments
@@ -562,6 +588,15 @@ LOCALES['ru'].update({
 LOCALES['en'].update({
     'sell_item_title': 'Sell item',
     'sell_item_msg': 'Sell {name} for {price} gold?',
+    'sell': 'Sell',
+    'sell_for': 'Sell: {price} gold',
+    'sell_btn_price': 'Sell ({price}g)',
+    'cannot_sell_equipped': 'Unequip the item before selling.',
+    'stat_confirm': 'Confirm',
+    'stat_reset': 'Reset',
+    'stat_points_draft': 'Points: {left} left ({used} planned)',
+    'stat_derived': 'Evade {evade:.0f}% · Crit {crit:.0f}% · XP +{xp:.0f}%',
+    'stat_value_draft': '{base} (+{delta})',
     'no_stat_points': 'You have no available stat points!',
     'equipment_title': '⚔️ Equipment',
     'purchased': 'You purchased {item}!',
@@ -613,13 +648,20 @@ LOCALES['en'].update({
     , 'save_slot_label': 'Slot {slot}'
     , 'autosave_slot_label': 'Autosave'
     # Stat names
-    , 'stat_attack': 'Attack'
+    , 'stat_attack': 'Strength'
     , 'stat_defense': 'Defense'
     , 'stat_intellect': 'Intellect'
     , 'stat_luck': 'Luck'
+    , 'stat_agility': 'Agility'
     , 'stat_fire_resist': 'Fire Resistance'
     , 'stat_cold_resist': 'Cold Resistance'
     , 'stat_max_hp': 'Max HP'
+    , 'stat_crit': 'Crit'
+    , 'stat_evade': 'Evade'
+    , 'artifact_slot_stat': '+{value} {stat}'
+    , 'artifact_slot_pct': '+{value}% {stat}'
+    , 'artifact_desc': 'Artifact ({count}): {slots}'
+    , 'artifact_desc_empty': 'Artifact'
     , 'requirement_met': '✓ Requirement met'
     , 'requirement_not_met': '✗ Requirement not met'
 })
@@ -627,6 +669,15 @@ LOCALES['en'].update({
 LOCALES['ru'].update({
     'sell_item_title': 'Продажа предмета',
     'sell_item_msg': 'Продать {name} за {price} золота?',
+    'sell': 'Продать',
+    'sell_for': 'Продажа: {price} золота',
+    'sell_btn_price': 'Продать ({price}з)',
+    'cannot_sell_equipped': 'Сначала снимите предмет.',
+    'stat_confirm': 'Подтвердить',
+    'stat_reset': 'Сбросить',
+    'stat_points_draft': 'Очки: {left} свободно ({used} в черновике)',
+    'stat_derived': 'Уклон {evade:.0f}% · Крит {crit:.0f}% · XP +{xp:.0f}%',
+    'stat_value_draft': '{base} (+{delta})',
     'no_stat_points': 'У вас нет доступных очков характеристик!',
     'equipment_title': '⚔️ Экипировка',
     'purchased': 'Вы купили {item}!',
@@ -678,13 +729,20 @@ LOCALES['ru'].update({
     , 'save_slot_label': 'Слот {slot}'
     , 'autosave_slot_label': 'Автосохранение'
     # Названия характеристик
-    , 'stat_attack': 'Атака'
+    , 'stat_attack': 'Сила'
     , 'stat_defense': 'Защита'
     , 'stat_intellect': 'Интеллект'
     , 'stat_luck': 'Удача'
+    , 'stat_agility': 'Ловкость'
     , 'stat_fire_resist': 'Сопротивление огню'
     , 'stat_cold_resist': 'Сопротивление холоду'
     , 'stat_max_hp': 'Макс. HP'
+    , 'stat_crit': 'Крит'
+    , 'stat_evade': 'Уклонение'
+    , 'artifact_slot_stat': '+{value} {stat}'
+    , 'artifact_slot_pct': '+{value}% {stat}'
+    , 'artifact_desc': 'Артефакт ({count}): {slots}'
+    , 'artifact_desc_empty': 'Артефакт'
     , 'requirement_met': '✓ Требование выполнено'
     , 'requirement_not_met': '✗ Требование не выполнено'
 })
@@ -696,6 +754,8 @@ LOCALES['en'].update({
     'menu_new_game': 'New Game',
     'menu_load_game': 'Load Game',
     'menu_language': 'Language: {lang}',
+    'menu_music_on': 'Music: On',
+    'menu_music_off': 'Music: Off',
     'menu_quit': 'Quit',
     'load_slot_title': 'Load slot',
     'slot_label_filled': 'Slot {slot}: {name} Lv{level}',
@@ -728,11 +788,14 @@ LOCALES['en'].update({
     'status_line': '{name} Lv{level} | HP {hp}/{max_hp} | Gold {gold} | Rot {rotation} | Wins {wins}{enemy}',
     'status_enemy': ' | {name} HP {hp}/{max_hp}',
     'mobile_encounter': 'Encounter: {name} (Lv{level}) HP {hp}/{max_hp}',
-    'mobile_hit': 'You hit {name} for {damage}.',
+    'mobile_hit': 'You hit {name} for {damage}. (Enemy HP {hp}/{max_hp})',
     'mobile_crit': 'CRIT x{mult}!',
     'enemy_dodged': '{name} dodged!',
     'enemy_stunned': '{name} is stunned!',
-    'mobile_enemy_hit': '{name} hits you for {damage}. (HP {hp}/{max_hp})',
+    'mobile_enemy_hit': '{name} hits you for {damage}. (Your HP {hp}/{max_hp})',
+    'combat_you_line': 'You: {name} Lv{level}  HP {hp}/{max_hp}',
+    'combat_enemy_line': 'Enemy: {name}  HP {hp}/{max_hp}',
+    'combat_enemy_none': 'Enemy: —',
     'mobile_victory': 'Victory! {name} defeated.',
     'mobile_defeat': 'Defeat...',
     'mobile_fled': 'You fled.',
@@ -758,7 +821,17 @@ LOCALES['en'].update({
     'rotation_now': 'Rotation → {rotation}',
     'prestige_now': 'Prestige → {level}',
     'shop_stub_msg': 'Shop (stub). Gold: {gold}. Full shop comes later.',
-    'stats_block': '{name} ({cls})\nLevel {level}  EXP {exp}/{exp_next}\nHP {hp}/{max_hp}\nATK {atk}  DEF {defense}\nINT {intellect}  LUCK {luck}\nFire/Cold resist {fire}/{cold}\nGold {gold}  Prestige {prestige}\nRotation {rotation}  Victories {wins}',
+    'stats_block': '{name} ({cls})\nLevel {level}  EXP {exp}/{exp_next}\nHP {hp}/{max_hp}\nATK {atk}  DEF {defense}\nINT {intellect}  LUCK {luck}  AGI {agility}\nFire/Cold resist {fire}/{cold}\nGold {gold}  Prestige {prestige}\nRotation {rotation}  Victories {wins}',
+    'ambush_proc': 'Ambush! First strike hits harder!',
+    'ambush_ready': 'Ambush ready: your first attack deals extra damage.',
+    'fortune_active_msg': '{ability}: +20% gold from this fight\'s victory.',
+    'fortune_gold_bonus': 'Fortune: bonus gold!',
+    'book_rogue_backstab_name': 'Tome: Backstab',
+    'book_rogue_backstab_desc': 'Learn or upgrade Backstab.',
+    'book_warrior_rage_name': 'Tome: Rage Strike',
+    'book_warrior_rage_desc': 'Learn or upgrade Rage Strike.',
+    'book_mage_lightning_name': 'Tome: Lightning',
+    'book_mage_lightning_desc': 'Learn or upgrade Lightning.',
     'default_hero': 'Hero',
     'equipped_mark': ' [E]',
     'inv_kind_weapon': 'weapon',
@@ -776,6 +849,10 @@ LOCALES['en'].update({
     'outcome_fled': 'Escaped',
     'continue': 'Continue',
     'ability_cd_btn': '{name} ({cd})',
+    'abilities_btn': 'Abilities',
+    'ability_hit': '{ability}: {damage} damage to {name}. (Enemy HP {hp}/{max_hp})',
+    'ability_evade_ready': '{ability}: ready to dodge the next hit.',
+    'ability_pick_title': 'Choose ability',
     'enemy_skill_fire': '{name} uses fire breath!',
     'enemy_skill_bash': '{name} uses shield bash! (stun)',
     'enemy_skill_drain': '{name} uses life drain!',
@@ -788,11 +865,13 @@ LOCALES['en'].update({
     'shop_price': '{name} — {price} gold',
     'shop_not_enough': 'Not enough gold.',
     'shop_bought': 'Bought {name}.',
+    'shop_upgrade_offer': '★ Upgrade',
     'explore': 'Explore',
     'explore_none': 'Nothing happened.',
     'event_ignore': 'Leave',
     'cannot_fight_dead': 'You are defeated. Load a save or start a new game.',
-    'game_over_msg': 'You died. Start a new game or load a save.',
+    'cannot_save_dead': 'Cannot save a defeated hero. Load a save or start a new game.',
+    'game_over_msg': 'You died. Load Autosave to retry from before this fight, or start a new game.',
     'new_game_failed': 'Could not create character.',
 })
 
@@ -800,6 +879,8 @@ LOCALES['ru'].update({
     'menu_new_game': 'Новая игра',
     'menu_load_game': 'Загрузить',
     'menu_language': 'Язык: {lang}',
+    'menu_music_on': 'Музыка: Вкл',
+    'menu_music_off': 'Музыка: Выкл',
     'menu_quit': 'Выйти',
     'load_slot_title': 'Слот загрузки',
     'slot_label_filled': 'Слот {slot}: {name} Ур.{level}',
@@ -832,11 +913,14 @@ LOCALES['ru'].update({
     'status_line': '{name} Ур.{level} | ОЗ {hp}/{max_hp} | Золото {gold} | Ротация {rotation} | Побед {wins}{enemy}',
     'status_enemy': ' | {name} ОЗ {hp}/{max_hp}',
     'mobile_encounter': 'Встреча: {name} (Ур.{level}) ОЗ {hp}/{max_hp}',
-    'mobile_hit': 'Вы нанесли {name} {damage} урона.',
+    'mobile_hit': 'Вы нанесли {name} {damage} урона. (ОЗ врага {hp}/{max_hp})',
     'mobile_crit': 'КРИТ x{mult}!',
     'enemy_dodged': '{name} уклонился!',
     'enemy_stunned': '{name} оглушён!',
-    'mobile_enemy_hit': '{name} наносит вам {damage}. (ОЗ {hp}/{max_hp})',
+    'mobile_enemy_hit': '{name} наносит вам {damage}. (Ваше ОЗ {hp}/{max_hp})',
+    'combat_you_line': 'Вы: {name} Ур.{level}  ОЗ {hp}/{max_hp}',
+    'combat_enemy_line': 'Враг: {name}  ОЗ {hp}/{max_hp}',
+    'combat_enemy_none': 'Враг: —',
     'mobile_victory': 'Победа! {name} побеждён.',
     'mobile_defeat': 'Поражение...',
     'mobile_fled': 'Вы сбежали.',
@@ -862,7 +946,17 @@ LOCALES['ru'].update({
     'rotation_now': 'Ротация → {rotation}',
     'prestige_now': 'Престиж → {level}',
     'shop_stub_msg': 'Магазин (заглушка). Золото: {gold}. Полный магазин позже.',
-    'stats_block': '{name} ({cls})\nУровень {level}  Опыт {exp}/{exp_next}\nОЗ {hp}/{max_hp}\nАТК {atk}  ЗАЩ {defense}\nИНТ {intellect}  УДАЧА {luck}\nСопр. огню/холоду {fire}/{cold}\nЗолото {gold}  Престиж {prestige}\nРотация {rotation}  Побед {wins}',
+    'stats_block': '{name} ({cls})\nУровень {level}  Опыт {exp}/{exp_next}\nОЗ {hp}/{max_hp}\nАТК {atk}  ЗАЩ {defense}\nИНТ {intellect}  УДАЧА {luck}  ЛОВК {agility}\nСопр. огню/холоду {fire}/{cold}\nЗолото {gold}  Престиж {prestige}\nРотация {rotation}  Побед {wins}',
+    'ambush_proc': 'Засада! Первый удар сильнее!',
+    'ambush_ready': 'Засада готова: первая атака наносит повышенный урон.',
+    'fortune_active_msg': '{ability}: +20% золота с победы в этом бою.',
+    'fortune_gold_bonus': 'Удача дня: бонус к золоту!',
+    'book_rogue_backstab_name': 'Том: Удар в спину',
+    'book_rogue_backstab_desc': 'Изучить или улучшить Удар в спину.',
+    'book_warrior_rage_name': 'Том: Удар ярости',
+    'book_warrior_rage_desc': 'Изучить или улучшить Удар ярости.',
+    'book_mage_lightning_name': 'Том: Молния',
+    'book_mage_lightning_desc': 'Изучить или улучшить Молнию.',
     'default_hero': 'Герой',
     'equipped_mark': ' [Н]',
     'inv_kind_weapon': 'оружие',
@@ -880,6 +974,10 @@ LOCALES['ru'].update({
     'outcome_fled': 'Побег',
     'continue': 'Далее',
     'ability_cd_btn': '{name} ({cd})',
+    'abilities_btn': 'Способности',
+    'ability_hit': '{ability}: {damage} урона по {name}. (ОЗ врага {hp}/{max_hp})',
+    'ability_evade_ready': '{ability}: готовы уклониться от следующего удара.',
+    'ability_pick_title': 'Выбор способности',
     'enemy_skill_fire': '{name} использует огненное дыхание!',
     'enemy_skill_bash': '{name} использует удар щитом! (оглушение)',
     'enemy_skill_drain': '{name} использует похищение жизни!',
@@ -892,11 +990,13 @@ LOCALES['ru'].update({
     'shop_price': '{name} — {price} золота',
     'shop_not_enough': 'Не хватает золота.',
     'shop_bought': 'Куплено: {name}.',
+    'shop_upgrade_offer': '★ Апгрейд',
     'explore': 'Исследовать',
     'explore_none': 'Ничего не произошло.',
     'event_ignore': 'Уйти',
     'cannot_fight_dead': 'Вы повержены. Загрузите сохранение или начните новую игру.',
-    'game_over_msg': 'Вы погибли. Начните новую игру или загрузите сохранение.',
+    'cannot_save_dead': 'Нельзя сохранить мёртвого героя. Загрузите сохранение или начните новую игру.',
+    'game_over_msg': 'Вы погибли. Загрузите автосохранение, чтобы вернуться к началу этого боя, или начните новую игру.',
     'new_game_failed': 'Не удалось создать персонажа.',
 })
 

@@ -10,7 +10,7 @@ from kivy.uix.screenmanager import Screen
 from kivy.uix.scrollview import ScrollView
 
 from locales import t
-from screens.dialogs import show_game_over
+from screens.dialogs import _confirm, show_game_over
 from ui_theme import panel, themed_root
 
 
@@ -43,11 +43,28 @@ class HubScreen(Screen):
         self.log_scroll.bind(width=self._on_log_scroll_width)
         content.add_widget(panel(self.log_scroll, alpha=0.5))
 
+        adventure_row = BoxLayout(
+            orientation="horizontal",
+            spacing=8,
+            size_hint_y=None,
+            height="58dp",
+        )
         self.btn_adventure = self._btn("", self._adventure)
-        self.btn_adventure.size_hint_y = None
+        self.btn_adventure.size_hint_y = 1
         self.btn_adventure.height = "58dp"
         self.btn_adventure.font_size = "17sp"
-        content.add_widget(self.btn_adventure)
+        self.btn_rest = self._btn("", self._rest)
+        self.btn_rest.size_hint_y = 1
+        self.btn_rest.height = "58dp"
+        self.btn_rest.font_size = "13sp"
+        self.btn_rest.halign = "center"
+        self.btn_rest.valign = "middle"
+        self.btn_rest.bind(
+            size=lambda i, _v: setattr(i, "text_size", (i.width - 12, i.height))
+        )
+        adventure_row.add_widget(self.btn_adventure)
+        adventure_row.add_widget(self.btn_rest)
+        content.add_widget(adventure_row)
 
         self.btn_inventory = self._btn("", self._inventory)
         self.btn_stats = self._btn("", self._stats)
@@ -105,6 +122,8 @@ class HubScreen(Screen):
         self.btn_adventure.text = t("explore")
         self.btn_inventory.text = t("inventory")
         session = self._session()
+        cost = session.rest_cost()
+        self.btn_rest.text = t("rest_btn", cost=cost)
         pts = 0
         if session.player:
             pts = int(getattr(session.player, "stat_points", 0) or 0)
@@ -114,7 +133,14 @@ class HubScreen(Screen):
         self.btn_prestige.text = t("prestige")
         self.btn_menu.text = t("menu")
         dead = bool(session.player and not session.player.is_alive())
+        full_hp = bool(
+            session.player
+            and session.player.is_alive()
+            and session.player.hp >= session.player.max_hp
+        )
         self.btn_adventure.disabled = dead
+        self.btn_rest.disabled = dead or full_hp or not session.player
+        self.btn_save.disabled = dead or not session.player
         self.btn_prestige.disabled = not session.can_prestige()
 
     def refresh(self):
@@ -137,21 +163,6 @@ class HubScreen(Screen):
         content.add_widget(close)
         popup.open()
 
-    def _confirm(self, title, body, on_yes):
-        box = BoxLayout(orientation="vertical", spacing=8, padding=8)
-        lbl = Label(text=body)
-        box.add_widget(lbl)
-        row = BoxLayout(size_hint_y=None, height="48dp", spacing=8)
-        yes = Button(text=t("yes"))
-        no = Button(text=t("no"))
-        popup = Popup(title=title, content=box, size_hint=(0.85, 0.35))
-        yes.bind(on_release=lambda *_: (popup.dismiss(), on_yes()))
-        no.bind(on_release=lambda *_: popup.dismiss())
-        row.add_widget(yes)
-        row.add_widget(no)
-        box.add_widget(row)
-        popup.open()
-
     def _adventure(self, *_):
         session = self._session()
         kind, payload = session.start_adventure()
@@ -162,6 +173,22 @@ class HubScreen(Screen):
             self._show_event(payload)
         else:
             self._info_popup(t("explore"), str(payload))
+
+    def _rest(self, *_):
+        session = self._session()
+        if not session.player:
+            return
+        if session.player.hp >= session.player.max_hp:
+            self._info_popup(t("rest_title"), t("rest_full"))
+            return
+        cost = session.rest_cost()
+
+        def _do():
+            ok, msg = session.rest()
+            self.refresh()
+            self._info_popup(t("rest_title"), msg if ok else str(msg))
+
+        _confirm(t("rest_title"), t("rest_msg", cost=cost), _do)
 
     def _show_event(self, payload):
         session = self._session()
@@ -220,12 +247,19 @@ class HubScreen(Screen):
         def rebuild():
             box.clear_widgets()
             slots_now = session.list_slots()
+            import save_system as _save_system
+
             for slot in range(1, 6):
                 info = slots_now.get(slot, {})
                 row = BoxLayout(size_hint_y=None, height="48dp", spacing=6)
+                is_autosave = slot == _save_system.MAX_SLOTS
                 pname = info.get("player_name") or "?"
                 plevel = info.get("level") or "?"
-                if info.get("exists"):
+                if is_autosave:
+                    label = t("autosave_slot_label")
+                    if info.get("exists"):
+                        label = f"{label}: {pname} Lv{plevel}"
+                elif info.get("exists"):
                     label = t("slot_label_filled", slot=slot, name=pname, level=plevel)
                 else:
                     label = t("slot_label_empty", slot=slot)
@@ -240,11 +274,17 @@ class HubScreen(Screen):
 
                     return _save
 
-                save_btn.bind(on_release=make_saver(slot))
+                # Reserved autosave slot — system-only writes
+                if is_autosave:
+                    save_btn.disabled = True
+                else:
+                    save_btn.bind(on_release=make_saver(slot))
                 row.add_widget(save_btn)
 
                 del_btn = Button(text=t("delete"), size_hint_x=0.35)
-                if info.get("exists"):
+                if is_autosave:
+                    del_btn.disabled = True
+                elif info.get("exists"):
 
                     def make_deleter(s, name, level):
                         def _do_delete():
@@ -253,7 +293,7 @@ class HubScreen(Screen):
                             rebuild()
 
                         def _ask(*_):
-                            self._confirm(
+                            _confirm(
                                 t("delete"),
                                 t("slot_label_filled", slot=s, name=name, level=level),
                                 _do_delete,
@@ -288,7 +328,7 @@ class HubScreen(Screen):
             self.refresh()
             self._info_popup(t("prestige"), msg)
 
-        self._confirm(t("prestige"), t("prestige_confirm"), _do)
+        _confirm(t("prestige"), t("prestige_confirm"), _do)
 
     def _menu(self, *_):
         self.manager.current = "menu"

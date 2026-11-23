@@ -32,16 +32,37 @@ SKILLS = {
         'base_cooldown': 4,
         'learn_cost': 1,
     },
-    'rogue_evade': {
-        'name': 'Уклонение',
-        'description': 'Уклониться от следующей атаки; шанс уклонения растёт с уровнем навыка.',
-        'base_multiplier': 0.0,
-        'stat': 'dexterity',
-        'stat_scale': 0.0,
+    'rogue_backstab': {
+        'name': 'Удар в спину',
+        'description': 'Сильный удар по атаке; игнорирует 30% защиты. Усиливается уровнем навыка.',
+        'base_multiplier': 1.6,
+        'stat': 'attack',
+        'stat_scale': 0.04,
         'max_level': 5,
         'base_cooldown': 3,
         'learn_cost': 1,
-    }
+    },
+    # Legacy alias so old books/saves resolve
+    'rogue_evade': {
+        'name': 'Удар в спину',
+        'description': 'Сильный удар по атаке; игнорирует 30% защиты.',
+        'base_multiplier': 1.6,
+        'stat': 'attack',
+        'stat_scale': 0.04,
+        'max_level': 5,
+        'base_cooldown': 3,
+        'learn_cost': 1,
+    },
+    'lucky_fortune': {
+        'name': 'Удача дня',
+        'description': 'До конца текущего боя +20% золота с побед.',
+        'base_multiplier': 0.0,
+        'stat': 'luck',
+        'stat_scale': 0.0,
+        'max_level': 5,
+        'base_cooldown': 5,
+        'learn_cost': 1,
+    },
 }
 
 

@@ -18,16 +18,36 @@ class CombatScreen(Screen):
         super().__init__(**kwargs)
         content = BoxLayout(orientation="vertical", padding=16, spacing=10)
 
-        self.status = Label(
+        status_box = BoxLayout(
+            orientation="vertical",
+            size_hint_y=None,
+            height="72dp",
+            spacing=2,
+            padding=(4, 4),
+        )
+        self.status_you = Label(
             text="",
             size_hint_y=None,
-            height="64dp",
+            height="32dp",
             font_size="15sp",
             halign="left",
             valign="middle",
         )
-        self.status.bind(size=lambda i, v: setattr(i, "text_size", (i.width, None)))
-        content.add_widget(panel(self.status, alpha=0.6))
+        self.status_enemy = Label(
+            text="",
+            size_hint_y=None,
+            height="32dp",
+            font_size="15sp",
+            halign="left",
+            valign="middle",
+        )
+        self.status_you.bind(size=lambda i, v: setattr(i, "text_size", (i.width, None)))
+        self.status_enemy.bind(
+            size=lambda i, v: setattr(i, "text_size", (i.width, None))
+        )
+        status_box.add_widget(self.status_you)
+        status_box.add_widget(self.status_enemy)
+        content.add_widget(panel(status_box, alpha=0.6))
 
         self.log = Label(
             text="",
@@ -97,14 +117,23 @@ class CombatScreen(Screen):
         if not choices:
             self.btn_ability.disabled = True
             self.btn_ability.text = t("no_abilities")
-        else:
-            aid, name, _desc, _cd, rc = choices[0]
+        elif len(choices) == 1:
+            _aid, name, _desc, _cd, rc = choices[0]
             if rc > 0:
                 self.btn_ability.disabled = True
                 self.btn_ability.text = t("ability_cd_btn", name=name, cd=rc)
             else:
                 self.btn_ability.disabled = False
                 self.btn_ability.text = name or t("ability_short")
+        else:
+            ready = [c for c in choices if c[4] == 0]
+            self.btn_ability.disabled = len(ready) == 0
+            if not ready:
+                # Show first on CD
+                _aid, name, _desc, _cd, rc = choices[0]
+                self.btn_ability.text = t("ability_cd_btn", name=name, cd=rc)
+            else:
+                self.btn_ability.text = t("abilities_btn")
         self.btn_attack.disabled = not active
         self.btn_potion.disabled = not active
         # Flee doubles as "leave" when combat already ended.
@@ -114,7 +143,8 @@ class CombatScreen(Screen):
 
     def refresh(self):
         session = self._session()
-        self.status.text = session.status_line()
+        self.status_you.text = session.combat_status_player()
+        self.status_enemy.text = session.combat_status_enemy()
         self.log.text = "\n".join(self._round_log) if self._round_log else ""
         self._refresh_ui()
         Clock.schedule_once(lambda *_: setattr(self.log_scroll, "scroll_y", 0), 0)
@@ -186,7 +216,45 @@ class CombatScreen(Screen):
         self._run_action(self._session().combat_attack)
 
     def _ability(self, *_):
-        self._run_action(self._session().combat_ability)
+        session = self._session()
+        choices = session.ability_choices()
+        if not choices:
+            return
+        ready = [(aid, name, desc, cd, rc) for aid, name, desc, cd, rc in choices if rc == 0]
+        if not ready:
+            return
+        if len(ready) == 1:
+            aid = ready[0][0]
+            self._run_action(lambda: session.combat_ability(aid))
+            return
+
+        # Multiple ready abilities — picker popup
+        box = BoxLayout(orientation="vertical", spacing=8, padding=8)
+        popup = Popup(
+            title=t("ability_pick_title"),
+            content=box,
+            size_hint=(0.9, 0.55),
+            auto_dismiss=True,
+        )
+        for aid, name, desc, _cd, _rc in ready:
+            label = name
+            if desc:
+                label = f"{name}\n{desc}"
+            btn = Button(text=label, size_hint_y=None, height="64dp", font_size="14sp")
+
+            def _make(a):
+                def _pick(*_):
+                    popup.dismiss()
+                    self._run_action(lambda: session.combat_ability(a))
+
+                return _pick
+
+            btn.bind(on_release=_make(aid))
+            box.add_widget(btn)
+        cancel = Button(text=t("back"), size_hint_y=None, height="48dp")
+        cancel.bind(on_release=lambda *_: popup.dismiss())
+        box.add_widget(cancel)
+        popup.open()
 
     def _potion(self, *_):
         self._run_action(self._session().combat_potion)

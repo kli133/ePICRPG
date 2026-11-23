@@ -25,6 +25,7 @@ from kivy.utils import platform
 
 from storage import init_data_dir
 from game_session import GameSession
+from music_player import MusicPlayer
 from screens.menu import MenuScreen
 from screens.character import CharacterScreen
 from screens.hub import HubScreen
@@ -71,13 +72,23 @@ class EpicRPGApp(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.session = GameSession()
+        self.music = MusicPlayer()
+
+    def _on_screen(self, _sm, name):
+        try:
+            self.music.notify_screen(name)
+        except Exception:
+            pass
 
     def build(self):
         data_dir = None
         if platform == "android":
             data_dir = self.user_data_dir
         init_data_dir(data_dir)
-        self.session.load_settings()
+        settings = self.session.load_settings() or {}
+        music_on = settings.get("music_enabled", True)
+        if music_on is False:
+            self.music.enabled = False
 
         sm = ScreenManager(transition=FadeTransition(duration=0.15))
         sm.add_widget(MenuScreen(name="menu"))
@@ -87,7 +98,23 @@ class EpicRPGApp(App):
         sm.add_widget(InventoryScreen(name="inventory"))
         sm.add_widget(ShopScreen(name="shop"))
         sm.add_widget(StatsScreen(name="stats"))
+        sm.bind(current=self._on_screen)
+        self._on_screen(sm, sm.current or "menu")
         return sm
+
+    def on_pause(self):
+        try:
+            self.music.pause()
+        except Exception:
+            pass
+        return True
+
+    def on_resume(self):
+        try:
+            if self.music.enabled:
+                self.music.resume()
+        except Exception:
+            pass
 
 
 def main():

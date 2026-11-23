@@ -110,12 +110,12 @@ class Enemy:
         self.exp_reward = exp_reward
         self.gold_reward = gold_reward
         self.stunned_turns = 0
-        # Враги имеют меньший шанс уклонения/крита
-        self.luck = max(0, level // 2)
+        # Враги: luck = level → небольшой evade/crit по тирам
+        self.luck = max(0, level)
 
     def get_evade_chance(self):
-        """Получить шанс уклонения (меньше чем у игрока)"""
-        return min(0.25, self.luck * 0.3 / 100.0)  # Максимум 25% для врагов
+        """Получить шанс уклонения (меньше чем у игрока, кап 20%)"""
+        return min(0.20, self.luck * 0.8 / 100.0)
     
     def get_crit_chance(self):
         """Получить шанс критического удара"""
@@ -168,16 +168,16 @@ class Enemy:
 # Враги по уровням
 ENEMY_TEMPLATES = {
     1: [
-        ("Гоблин", 1, 30, 8, 2, 25, 10),
-        ("Крыса", 1, 20, 6, 1, 20, 5),
-        ("Слизень", 1, 25, 5, 3, 22, 8),
-        ("Гоблин-Шаман", 1, 22, 7, 1, 18, 6, [('fire_breath', 0.12)]),
+        ("Гоблин", 1, 60, 13, 2, 25, 10),
+        ("Крыса", 1, 48, 12, 1, 20, 5),
+        ("Слизень", 1, 55, 12, 3, 22, 8),
+        ("Гоблин-Шаман", 1, 52, 13, 1, 18, 6, [('fire_breath', 0.12)]),
     ],
     2: [
-        ("Орк", 2, 50, 12, 4, 40, 20),
-        ("Волк", 2, 40, 14, 3, 35, 15),
-        ("Скелет", 2, 45, 10, 5, 38, 18),
-        ("Капитан бандитов", 2, 48, 15, 6, 45, 22, [('shield_bash', 0.18)]),
+        ("Орк", 2, 62, 14, 4, 40, 20),
+        ("Волк", 2, 52, 15, 3, 35, 15),
+        ("Скелет", 2, 56, 13, 5, 38, 18),
+        ("Капитан бандитов", 2, 60, 15, 6, 45, 22, [('shield_bash', 0.18)]),
     ],
     3: [
         ("Тролль", 3, 80, 18, 7, 60, 35),
@@ -202,7 +202,9 @@ ENEMY_TEMPLATES = {
 
 def create_enemy(player_level, rotation=0):
     """Создать врага подходящего уровня и масштабировать его по ротации."""
-    enemy_level = max(1, min(5, player_level + random.randint(-1, 1)))
+    # Early rotations: at most +0 above player level; later +1
+    jitter_hi = 0 if rotation <= 1 else 1
+    enemy_level = max(1, min(5, player_level + random.randint(-1, jitter_hi)))
     enemy_data = random.choice(ENEMY_TEMPLATES[enemy_level])
     # enemy_data may optionally include a skills list as 8th element
     enemy = Enemy(*enemy_data[:7])
@@ -211,10 +213,10 @@ def create_enemy(player_level, rotation=0):
     else:
         enemy.skills = []
 
-    # Увеличенный масштаб по ротациям: даём больше атаки/HP/защиты
-    hp_extra = rotation * 30 + player_level * 5
-    atk_extra = rotation * 4 + player_level // 2
-    def_extra = rotation * 2 + player_level // 3
+    # Масштаб по ротациям (сглаженный клифф R0→R1)
+    hp_extra = rotation * 12 + player_level * 5
+    atk_extra = rotation * 2 + player_level // 2
+    def_extra = rotation * 1 + player_level // 3
 
     enemy.max_hp += hp_extra
     enemy.hp = enemy.max_hp
@@ -266,14 +268,21 @@ def combat(player, inventory, rotation=0):
 
         if choice == '1':
             damage = random.randint(int(player.get_total_attack() * 0.8), int(player.get_total_attack() * 1.2))
-            actual_damage = enemy.take_damage(damage)
-            try:
-                player.apply_artifact_on_hit(enemy, actual_damage)
-            except Exception:
-                pass
-            print(t('you_attack', name=enemy.name, damage=actual_damage))
+            if enemy.check_evade():
+                print(t('enemy_dodged', name=enemy.name))
+                actual_damage = 0
+            else:
+                crit = player.check_crit()
+                if crit > 1.0:
+                    damage = int(damage * crit)
+                actual_damage = enemy.take_damage(damage)
+                try:
+                    player.apply_artifact_on_hit(enemy, actual_damage)
+                except Exception:
+                    pass
+                print(t('you_attack', name=enemy.name, damage=actual_damage))
 
-            if not enemy.is_alive():
+            if actual_damage > 0 and not enemy.is_alive():
                 print(f"\n{'='*50}")
                 cprint(t('victory', name=enemy.name), 'green')
                 print(f"{'='*50}")
@@ -294,8 +303,12 @@ def combat(player, inventory, rotation=0):
                     enemy.exp_reward * (1 + getattr(player, 'intellect', 0) * 0.05 + rotation * 0.10)
                     * prestige_exp_mult
                 )
+                try:
+                    _luck = player.get_total_luck()
+                except Exception:
+                    _luck = getattr(player, 'luck', 0)
                 gold_gain = int(
-                    enemy.gold_reward * (1 + getattr(player, 'luck', 0) * 0.05 + rotation * 0.12)
+                    enemy.gold_reward * (1 + _luck * 0.05 + rotation * 0.12)
                     * prestige_gold_mult
                     * artifact_gold_mult
                 )
@@ -316,7 +329,7 @@ def combat(player, inventory, rotation=0):
 
                 loot_chance = min(
                     0.95,
-                    0.35 + rotation * 0.05 + getattr(player, 'luck', 0) * 0.04
+                    0.35 + rotation * 0.05 + _luck * 0.04
                     + player.level * 0.01 + loot_bonus
                 )
                 if random.random() < loot_chance:
@@ -331,7 +344,7 @@ def combat(player, inventory, rotation=0):
                     if rotation >= 4:
                         loot_items.extend(['legendary_sword', 'legendary_armor'])
 
-                    extra_drop = random.random() < min(0.35, getattr(player, 'luck', 0) * 0.03 + rotation * 0.02)
+                    extra_drop = random.random() < min(0.35, _luck * 0.03 + rotation * 0.02)
                     choice_id = random.choice(loot_items)
                     loot = get_item_scaled(choice_id, rotation=rotation, player_level=player.level)
                     if loot:
@@ -345,7 +358,7 @@ def combat(player, inventory, rotation=0):
                 # Rare artifact drop
                 try:
                     from items import get_random_artifact
-                    artifact_chance = min(0.20, 0.02 + rotation * 0.01 + getattr(player, 'luck', 0) * 0.002)
+                    artifact_chance = min(0.20, 0.02 + rotation * 0.01 + _luck * 0.002)
                     if random.random() < artifact_chance:
                         artifact = get_random_artifact()
                         if artifact:

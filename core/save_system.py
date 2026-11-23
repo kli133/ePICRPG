@@ -158,9 +158,58 @@ def deserialize_item(item_data):
         return item
 
 
+def _player_alive(player) -> bool:
+    if not player:
+        return False
+    try:
+        if hasattr(player, "is_alive"):
+            return bool(player.is_alive())
+    except Exception:
+        pass
+    return int(getattr(player, "hp", 0) or 0) > 0
+
+
+def _slot_file_hp(slot: int):
+    """Return saved player hp for a slot, or None if missing/unreadable."""
+    try:
+        fn = _slot_filename(int(slot))
+        if not os.path.exists(fn):
+            return None
+        with open(fn, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("player", {}).get("hp")
+    except Exception:
+        return None
+
+
+def purge_dead_save_slot(slot: int):
+    """Delete a slot if it stores a dead hero (hp <= 0). Returns True if deleted."""
+    hp = _slot_file_hp(slot)
+    if hp is None:
+        return False
+    try:
+        if int(hp) > 0:
+            return False
+    except (TypeError, ValueError):
+        return False
+    ok, _ = delete_save_slot(slot)
+    return bool(ok)
+
+
+def purge_dead_saves():
+    """Remove any slot (including autosave) that contains a dead hero."""
+    removed = []
+    for i in range(1, MAX_SLOTS + 1):
+        if purge_dead_save_slot(i):
+            removed.append(i)
+    return removed
+
+
 def save_game(player, inventory, rotation, victories):
     """Сохранить игру в файл"""
     try:
+        if not _player_alive(player):
+            return False, t("cannot_save_dead")
         # Сериализация данных игрока
         player_data = {
             'name': player.name,
@@ -178,6 +227,7 @@ def save_game(player, inventory, rotation, victories):
             'cold_resist': getattr(player, 'cold_resist', 0),
             'luck': getattr(player, 'luck', 0),
             'intellect': getattr(player, 'intellect', 0),
+            'agility': getattr(player, 'agility', 0),
             'gold': player.gold,
             'passive_evade_chance': getattr(player, 'passive_evade_chance', 0.0),
         }
@@ -225,11 +275,49 @@ def save_game(player, inventory, rotation, victories):
         return False, t('save_error', error=str(e))
 
 
-def save_settings(locale_code: str):
-    """Сохранить простые настройки (например, язык) в отдельный файл"""
+def migrate_player_skills(player):
+    """Map legacy skill/ability ids after load (e.g. rogue_evade -> rogue_backstab)."""
+    if not player:
+        return
+    # rogue_evade -> rogue_backstab
+    if "rogue_evade" in getattr(player, "skills", {}):
+        lvl = player.skills.pop("rogue_evade", 1)
+        player.skills["rogue_backstab"] = max(player.skills.get("rogue_backstab", 0), lvl)
+    if "rogue_evade" in getattr(player, "abilities", {}):
+        player.abilities.pop("rogue_evade", None)
+        player.ability_cooldowns.pop("rogue_evade", None)
+    # Ensure class ability present
+    if player.class_obj and getattr(player.class_obj, "ability", None):
+        aid, aname, adesc, acd = player.class_obj.ability
+        if aid not in player.abilities:
+            player.abilities[aid] = (aname, adesc, acd)
+            player.ability_cooldowns[aid] = 0
+        if aid not in player.skills:
+            player.skills[aid] = 1
+        else:
+            # Refresh name/desc from class for renamed skills
+            player.abilities[aid] = (aname, adesc, acd)
+
+
+def save_settings(locale_code: str = None, music_enabled: bool = None):
+    """Сохранить настройки (язык, музыка). Не затирает незаданные поля."""
     try:
-        data = {'locale': locale_code}
-        with open(_data_path(SETTINGS_FILE), 'w', encoding='utf-8') as f:
+        path = _data_path(SETTINGS_FILE)
+        data = {}
+        if os.path.exists(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f) or {}
+            except Exception:
+                data = {}
+        if locale_code is not None:
+            data['locale'] = locale_code
+        if music_enabled is not None:
+            data['music_enabled'] = bool(music_enabled)
+        if 'locale' not in data and locale_code is None:
+            # keep file usable if only music is written on fresh install
+            pass
+        with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         return True
     except Exception:
@@ -242,6 +330,8 @@ def _slot_filename(slot: int) -> str:
 
 def list_save_slots():
     """Вернуть словарь статусов слотов: {slot: {'exists': bool, 'mtime': float or None}}"""
+    # Drop corrupted/dead saves so they cannot occupy autosave or normal slots
+    purge_dead_saves()
     res = {}
     for i in range(1, MAX_SLOTS + 1):
         fn = _slot_filename(i)
@@ -255,13 +345,22 @@ def list_save_slots():
                 info['player_name'] = player.get('name')
                 info['class_id'] = player.get('class_id')
                 info['level'] = player.get('level')
+                info['hp'] = player.get('hp')
             except Exception:
                 info['player_name'] = None
                 info['class_id'] = None
                 info['level'] = None
+                info['hp'] = None
             res[i] = info
         else:
-            res[i] = {'exists': False, 'mtime': None, 'player_name': None, 'class_id': None, 'level': None}
+            res[i] = {
+                'exists': False,
+                'mtime': None,
+                'player_name': None,
+                'class_id': None,
+                'level': None,
+                'hp': None,
+            }
     return res
 
 
@@ -286,6 +385,8 @@ def delete_save_slot(slot: int):
 def save_game_slot(player, inventory, rotation, victories, slot: int = 1):
     """Сохранить игру в указанном слоте"""
     try:
+        if not _player_alive(player):
+            return False, t("cannot_save_dead")
         fn = _slot_filename(slot)
         # Reuse save_game logic but write to slot file
         player_data = {
@@ -304,6 +405,7 @@ def save_game_slot(player, inventory, rotation, victories, slot: int = 1):
             'cold_resist': getattr(player, 'cold_resist', 0),
             'luck': getattr(player, 'luck', 0),
             'intellect': getattr(player, 'intellect', 0),
+            'agility': getattr(player, 'agility', 0),
             'gold': player.gold,
             'passive_evade_chance': getattr(player, 'passive_evade_chance', 0.0),
         }
@@ -373,6 +475,7 @@ def load_game_slot(slot: int = 1):
         player.cold_resist = player_data.get('cold_resist', 0)
         player.luck = player_data.get('luck', 0)
         player.intellect = player_data.get('intellect', 0)
+        player.agility = player_data.get('agility', 0)
         player.gold = player_data['gold']
         player.passive_evade_chance = player_data.get('passive_evade_chance', 0.0)
 
@@ -423,6 +526,7 @@ def load_game_slot(slot: int = 1):
         rotation = save_data.get('rotation', 0)
         victories = save_data.get('victories', 0)
 
+        migrate_player_skills(player)
         return (player, inventory, rotation, victories), t('load_success')
 
     except Exception as e:
@@ -473,6 +577,7 @@ def load_game():
         player.cold_resist = player_data.get('cold_resist', 0)
         player.luck = player_data.get('luck', 0)
         player.intellect = player_data.get('intellect', 0)
+        player.agility = player_data.get('agility', 0)
         player.gold = player_data['gold']
         player.passive_evade_chance = player_data.get('passive_evade_chance', 0.0)
         
@@ -530,7 +635,8 @@ def load_game():
         # Остальные параметры игры
         rotation = save_data.get('rotation', 0)
         victories = save_data.get('victories', 0)
-        
+
+        migrate_player_skills(player)
         return (player, inventory, rotation, victories), t('load_success')
     
     except Exception as e:
